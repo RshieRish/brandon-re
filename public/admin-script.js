@@ -3,6 +3,46 @@
 // API Configuration
 const API_BASE_URL = window.location.origin;
 
+// Authentication Functions
+function checkAuthenticationStatus() {
+    const isAuthenticated = localStorage.getItem('adminAuth') === 'authenticated';
+    const loginTime = localStorage.getItem('loginTime');
+    const currentTime = new Date().getTime();
+    const sessionDuration = 24 * 60 * 60 * 1000; // 24 hours
+    
+    // Check if session has expired
+    if (loginTime && (currentTime - parseInt(loginTime)) > sessionDuration) {
+        localStorage.removeItem('adminAuth');
+        localStorage.removeItem('adminUser');
+        localStorage.removeItem('loginTime');
+        window.location.href = 'login.html';
+        return false;
+    }
+    
+    if (!isAuthenticated) {
+        window.location.href = 'login.html';
+        return false;
+    }
+    
+    return true;
+}
+
+function updateUserInfo() {
+    const username = localStorage.getItem('adminUser');
+    const loginTime = localStorage.getItem('loginTime');
+    
+    if (username) {
+        // Update any user-specific elements
+        const userElements = document.querySelectorAll('.admin-user-name');
+        userElements.forEach(el => {
+            el.textContent = username;
+        });
+    }
+    
+    // Set up periodic session check
+    setInterval(checkAuthenticationStatus, 60000); // Check every minute
+}
+
 // DOM Elements
 const navLinks = document.querySelectorAll('.admin-nav-link');
 const sections = document.querySelectorAll('.admin-section');
@@ -14,6 +54,11 @@ let viewsChart, leadsChart, trafficChart, funnelChart, trendsChart;
 
 // Initialize Admin Panel
 document.addEventListener('DOMContentLoaded', function() {
+    // Verify authentication again
+    if (!checkAuthenticationStatus()) {
+        return;
+    }
+    
     initializeNavigation();
     loadDashboardData();
     initializeCharts();
@@ -22,6 +67,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadListings();
     loadLeads();
     setDefaultDates();
+    updateUserInfo();
 });
 
 // Navigation
@@ -406,6 +452,12 @@ function loadAnalyticsData() {
 
 // Event Listeners
 function initializeEventListeners() {
+    // Logout button
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', handleLogout);
+    }
+    
     // Modal handling
     modalCloses.forEach(close => {
         close.addEventListener('click', closeModal);
@@ -464,11 +516,7 @@ function initializeEventListeners() {
         testConnectionBtn.addEventListener('click', testConnection);
     }
     
-    // Logout button
-    const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', handleLogout);
-    }
+    // Logout functionality handled in initializeEventListeners
     
     // Update analytics button
     const updateAnalytics = document.getElementById('updateAnalytics');
@@ -666,8 +714,18 @@ function testConnection() {
 
 function handleLogout() {
     if (confirm('Are you sure you want to logout?')) {
-        // In a real app, this would clear session and redirect
-        window.location.href = 'index.html';
+        // Clear authentication data
+        localStorage.removeItem('adminAuth');
+        localStorage.removeItem('adminUser');
+        localStorage.removeItem('loginTime');
+        
+        // Show logout message
+        showNotification('Logged out successfully', 'success');
+        
+        // Redirect to login page
+        setTimeout(() => {
+            window.location.href = 'login.html';
+        }, 1000);
     }
 }
 

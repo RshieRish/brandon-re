@@ -423,6 +423,37 @@
         </div>
     </div>
 
+    <script>
+        // Authentication check - must be at the top
+        function checkAuthentication() {
+            const isAuthenticated = localStorage.getItem('adminAuth') === 'authenticated';
+            const loginTime = localStorage.getItem('loginTime');
+            const currentTime = new Date().getTime();
+            const sessionDuration = 24 * 60 * 60 * 1000; // 24 hours
+            
+            // Check if session has expired
+            if (loginTime && (currentTime - parseInt(loginTime)) > sessionDuration) {
+                localStorage.removeItem('adminAuth');
+                localStorage.removeItem('adminUser');
+                localStorage.removeItem('loginTime');
+                window.location.href = 'login.html';
+                return false;
+            }
+            
+            if (!isAuthenticated) {
+                window.location.href = 'login.html';
+                return false;
+            }
+            
+            return true;
+        }
+        
+        // Check authentication immediately
+        if (!checkAuthentication()) {
+            // Stop loading the page if not authenticated
+            document.body.style.display = 'none';
+        }
+    </script>
     <script src="admin-script.js"></script>
 </body>
 </html>

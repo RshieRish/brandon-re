@@ -1,11 +1,91 @@
 const express = require('express');
 const router = express.Router();
-// Use mock data service for free operation
 const mockDataService = require('../services/mockDataService');
-// const idxService = require('../services/idxService'); // Uncomment for real IDX API
 const { validateApiKey } = require('../middleware');
 
-// Apply API key validation to all admin routes
+// Demo credentials (in production, use proper authentication)
+const ADMIN_CREDENTIALS = {
+    username: 'admin',
+    password: 'admin123' // In production, this should be hashed
+};
+
+// Authentication routes (no API key required)
+// Login endpoint
+router.post('/login', (req, res) => {
+    try {
+        const { username, password } = req.body;
+        
+        // Validate credentials
+        if (username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password) {
+            // In production, generate a proper JWT token
+            const token = 'demo-auth-token-' + Date.now();
+            
+            res.json({
+                success: true,
+                message: 'Login successful',
+                token: token,
+                user: {
+                    username: username,
+                    role: 'admin'
+                }
+            });
+        } else {
+            res.status(401).json({
+                success: false,
+                message: 'Invalid username or password'
+            });
+        }
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Login failed. Please try again.'
+        });
+    }
+});
+
+// Logout endpoint
+router.post('/logout', (req, res) => {
+    try {
+        // In production, invalidate the token
+        res.json({
+            success: true,
+            message: 'Logout successful'
+        });
+    } catch (error) {
+        console.error('Logout error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Logout failed'
+        });
+    }
+});
+
+// Middleware to check authentication (for future use)
+function requireAuth(req, res, next) {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({
+            success: false,
+            message: 'Authentication required'
+        });
+    }
+    
+    // In production, verify the JWT token
+    const token = authHeader.substring(7);
+    if (token.startsWith('demo-auth-token-')) {
+        req.user = { username: 'admin', role: 'admin' };
+        next();
+    } else {
+        res.status(401).json({
+            success: false,
+            message: 'Invalid token'
+        });
+    }
+}
+
+// Apply API key validation to protected admin routes
 router.use(validateApiKey);
 
 // Health check with detailed system info
