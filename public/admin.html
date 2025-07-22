@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Brandon Sweeney | SWS & Co.</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="admin-styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="admin-body">
+    <!-- Admin Navigation -->
+    <nav class="admin-navbar">
+        <div class="admin-nav-container">
+            <div class="admin-nav-logo">
+                <h2>SWS & Co. Admin</h2>
+                <span class="admin-tagline">Dashboard</span>
+            </div>
+            <div class="admin-nav-menu">
+                <a href="#dashboard" class="admin-nav-link active" data-section="dashboard">
+                    <i class="fas fa-chart-line"></i> Dashboard
+                </a>
+                <a href="#listings" class="admin-nav-link" data-section="listings">
+                    <i class="fas fa-home"></i> Listings
+                </a>
+                <a href="#leads" class="admin-nav-link" data-section="leads">
+                    <i class="fas fa-users"></i> Leads
+                </a>
+                <a href="#analytics" class="admin-nav-link" data-section="analytics">
+                    <i class="fas fa-chart-bar"></i> Analytics
+                </a>
+                <a href="#settings" class="admin-nav-link" data-section="settings">
+                    <i class="fas fa-cog"></i> Settings
+                </a>
+            </div>
+            <div class="admin-nav-actions">
+                <a href="index.html" class="btn btn-secondary">
+                    <i class="fas fa-external-link-alt"></i> View Site
+                </a>
+                <button class="btn btn-primary" id="logoutBtn">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Admin Content -->
+    <main class="admin-main">
+        <!-- Dashboard Section -->
+        <section id="dashboard-section" class="admin-section active">
+            <div class="admin-header">
+                <h1>Dashboard</h1>
+                <p>Welcome back, Brandon! Here's your real estate business overview.</p>
+            </div>
+
+            <!-- Stats Cards -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-home"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="totalListings">0</h3>
+                        <p>Active Listings</p>
+                        <span class="stat-change positive">+3 this month</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="totalLeads">0</h3>
+                        <p>New Leads</p>
+                        <span class="stat-change positive">+12 this week</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="avgPrice">$0</h3>
+                        <p>Avg. Listing Price</p>
+                        <span class="stat-change positive">+5.2% vs last month</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-eye"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3 id="siteViews">0</h3>
+                        <p>Site Views</p>
+                        <span class="stat-change positive">+18% this week</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Row -->
+            <div class="charts-row">
+                <div class="chart-container">
+                    <h3>Listing Views (Last 30 Days)</h3>
+                    <canvas id="viewsChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>Lead Sources</h3>
+                    <canvas id="leadsChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="recent-activity">
+                <h3>Recent Activity</h3>
+                <div class="activity-list" id="activityList">
+                    <!-- Activity items will be loaded here -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Listings Section -->
+        <section id="listings-section" class="admin-section">
+            <div class="admin-header">
+                <h1>Manage Listings</h1>
+                <button class="btn btn-primary" id="addListingBtn">
+                    <i class="fas fa-plus"></i> Add New Listing
+                </button>
+            </div>
+
+            <!-- Listings Filter -->
+            <div class="admin-filters">
+                <input type="text" id="listingSearch" placeholder="Search listings..." class="filter-input">
+                <select id="statusFilter" class="filter-input">
+                    <option value="">All Status</option>
+                    <option value="active">Active</option>
+                    <option value="pending">Pending</option>
+                    <option value="sold">Sold</option>
+                </select>
+                <select id="cityFilterAdmin" class="filter-input">
+                    <option value="">All Cities</option>
+                    <option value="Dracut">Dracut</option>
+                    <option value="Lowell">Lowell</option>
+                    <option value="Tyngsborough">Tyngsborough</option>
+                </select>
+            </div>
+
+            <!-- Listings Table -->
+            <div class="admin-table-container">
+                <table class="admin-table" id="listingsTable">
+                    <thead>
+                        <tr>
+                            <th>Photo</th>
+                            <th>Address</th>
+                            <th>Price</th>
+                            <th>Beds/Baths</th>
+                            <th>Status</th>
+                            <th>Days on Market</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="listingsTableBody">
+                        <!-- Listings will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Leads Section -->
+        <section id="leads-section" class="admin-section">
+            <div class="admin-header">
+                <h1>Lead Management</h1>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" id="exportLeadsBtn">
+                        <i class="fas fa-download"></i> Export
+                    </button>
+                    <button class="btn btn-primary" id="addLeadBtn">
+                        <i class="fas fa-plus"></i> Add Lead
+                    </button>
+                </div>
+            </div>
+
+            <!-- Leads Filter -->
+            <div class="admin-filters">
+                <input type="text" id="leadSearch" placeholder="Search leads..." class="filter-input">
+                <select id="leadStatusFilter" class="filter-input">
+                    <option value="">All Status</option>
+                    <option value="new">New</option>
+                    <option value="contacted">Contacted</option>
+                    <option value="qualified">Qualified</option>
+                    <option value="closed">Closed</option>
+                </select>
+                <select id="leadSourceFilter" class="filter-input">
+                    <option value="">All Sources</option>
+                    <option value="website">Website</option>
+                    <option value="referral">Referral</option>
+                    <option value="social">Social Media</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+
+            <!-- Leads Table -->
+            <div class="admin-table-container">
+                <table class="admin-table" id="leadsTable">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Interest</th>
+                            <th>Source</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leadsTableBody">
+                        <!-- Leads will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Analytics Section -->
+        <section id="analytics-section" class="admin-section">
+            <div class="admin-header">
+                <h1>Analytics & Reports</h1>
+                <div class="date-range-picker">
+                    <input type="date" id="startDate" class="filter-input">
+                    <span>to</span>
+                    <input type="date" id="endDate" class="filter-input">
+                    <button class="btn btn-primary" id="updateAnalytics">Update</button>
+                </div>
+            </div>
+
+            <!-- Analytics Grid -->
+            <div class="analytics-grid">
+                <div class="analytics-card">
+                    <h3>Website Traffic</h3>
+                    <canvas id="trafficChart"></canvas>
+                </div>
+                <div class="analytics-card">
+                    <h3>Popular Listings</h3>
+                    <div id="popularListings" class="popular-listings">
+                        <!-- Popular listings will be loaded here -->
+                    </div>
+                </div>
+                <div class="analytics-card">
+                    <h3>Conversion Funnel</h3>
+                    <canvas id="funnelChart"></canvas>
+                </div>
+                <div class="analytics-card">
+                    <h3>Market Trends</h3>
+                    <canvas id="trendsChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Settings Section -->
+        <section id="settings-section" class="admin-section">
+            <div class="admin-header">
+                <h1>Settings</h1>
+                <p>Manage your account and website settings</p>
+            </div>
+
+            <div class="settings-grid">
+                <!-- Profile Settings -->
+                <div class="settings-card">
+                    <h3>Profile Information</h3>
+                    <form id="profileForm">
+                        <div class="form-group">
+                            <label for="fullName">Full Name</label>
+                            <input type="text" id="fullName" value="Brandon Sweeney" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label for="email">Email</label>
+                            <input type="email" id="email" value="info@solidwithsweeney.com" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label for="phone">Phone</label>
+                            <input type="tel" id="phone" value="(978) 987-2806" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label for="tagline">Tagline</label>
+                            <input type="text" id="tagline" value="Your Dracut Realtor" class="form-input">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Profile</button>
+                    </form>
+                </div>
+
+                <!-- Website Settings -->
+                <div class="settings-card">
+                    <h3>Website Settings</h3>
+                    <form id="websiteForm">
+                        <div class="form-group">
+                            <label for="siteTitle">Site Title</label>
+                            <input type="text" id="siteTitle" value="Brandon Sweeney - Your Dracut Realtor" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label for="metaDescription">Meta Description</label>
+                            <textarea id="metaDescription" class="form-input" rows="3">Professional real estate services in Dracut, MA and surrounding areas.</textarea>
+                        </div>
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="enableChatbot" checked>
+                                <span class="checkmark"></span>
+                                Enable AI Chatbot
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="enableAnalytics" checked>
+                                <span class="checkmark"></span>
+                                Enable Analytics Tracking
+                            </label>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Settings</button>
+                    </form>
+                </div>
+
+                <!-- API Settings -->
+                <div class="settings-card">
+                    <h3>API Configuration</h3>
+                    <form id="apiForm">
+                        <div class="form-group">
+                            <label for="idxApiKey">IDX API Key</label>
+                            <input type="password" id="idxApiKey" placeholder="Enter your IDX API key" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label for="mlsPin">MLS PIN</label>
+                            <input type="text" id="mlsPin" placeholder="Enter your MLS PIN" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="autoSync" checked>
+                                <span class="checkmark"></span>
+                                Auto-sync listings daily
+                            </label>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save API Settings</button>
+                    </form>
+                </div>
+
+                <!-- System Status -->
+                <div class="settings-card">
+                    <h3>System Status</h3>
+                    <div class="status-list">
+                        <div class="status-item">
+                            <span class="status-label">API Connection</span>
+                            <span class="status-indicator online">Online</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Database</span>
+                            <span class="status-indicator online">Connected</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Last Sync</span>
+                            <span class="status-value">2 hours ago</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Server Status</span>
+                            <span class="status-indicator online">Healthy</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary" id="testConnectionBtn">
+                        <i class="fas fa-sync"></i> Test Connection
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modals -->
+    <div id="addListingModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Listing</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="addListingForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="listingAddress">Address</label>
+                            <input type="text" id="listingAddress" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="listingCity">City</label>
+                            <input type="text" id="listingCity" class="form-input" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="listingPrice">Price</label>
+                            <input type="number" id="listingPrice" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="listingBedrooms">Bedrooms</label>
+                            <input type="number" id="listingBedrooms" class="form-input" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="listingBathrooms">Bathrooms</label>
+                            <input type="number" step="0.5" id="listingBathrooms" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="listingSqft">Square Feet</label>
+                            <input type="number" id="listingSqft" class="form-input" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="listingDescription">Description</label>
+                        <textarea id="listingDescription" class="form-input" rows="4" required></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary modal-close">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Add Listing</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="admin-script.js"></script>
+</body>
+</html>

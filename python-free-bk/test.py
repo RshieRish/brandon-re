@@ -1,0 +1,376 @@
+#!/usr/bin/env python3
+"""
+idx_server.py – FREE IDX ETL + API for MLS PIN “Manual Download”
+
+• Fetches nightly pipe-delimited listing file + photos via FTP (if enabled)
+• Loads/merges data into Postgres (JSONB for future-proof schema)
+• Launches FastAPI w/ lightweight search endpoints
+
+Author : Your Name Here
+License: MIT
+"""
+
+import os
+import io
+import csv
+import logging
+import json
+import asyncio
+import ftplib
+from datetime import datetime, timezone
+from typing import Dict, Any, List, Optional
+
+import psycopg2
+from psycopg2.extras import Json, execute_values
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from dotenv import load_dotenv
+import uvicorn
+
+# ─────────────────────────────── CONFIG ──────────────────────────────── #
+
+ENV_PATH = os.getenv("IDX_ENV_FILE", ".env")
+load_dotenv(ENV_PATH)
+
+FTP_HOST        = os.getenv("FTP_HOST")        # e.g. ftp.mlspin.com
+FTP_USER        = os.getenv("FTP_USER")        # MLS PIN username
+FTP_PASS        = os.getenv("FTP_PASS")        # MLS PIN password
+FTP_LISTINGS_DIR= os.getenv("FTP_LISTINGS_DIR", "/")  # usually root
+LISTING_FILE    = os.getenv("LISTING_FILE", "LISTINGS.TXT")
+PHOTO_DIR       = os.getenv("PHOTO_DIR", "/photos")   # if you need photos
+DOWNLOAD_PHOTOS = os.getenv("DOWNLOAD_PHOTOS", "false").lower() == "true"
+
+DB_DSN          = os.getenv("DATABASE_URL")  # postgres://user:pass@host:5432/db
+BATCH_SIZE      = int(os.getenv("UPSERT_BATCH_SIZE", "1000"))
+SCHEDULE_CRON   = os.getenv("CRON_EXPR", "0 2 * * *")  # every day 02:00 local
+
+API_HOST        = os.getenv("API_HOST", "0.0.0.0")
+API_PORT        = int(os.getenv("API_PORT", "8000"))
+
+# List of fields you want to promote to columns for faster search
+# Leave empty to keep everything inside a JSONB blob
+FIELD_MAP: List[str] = [
+    "ListingID",
+    "ListingKey",
+    "ListPrice",
+    "StreetName",
+    "City",
+    "StateOrProvince",
+    "PostalCode",
+    "BedroomsTotal",
+    "BathroomsTotalInteger",
+    "LivingArea",
+    "Latitude",
+    "Longitude",
+    "ListingStatus",
+    "ModificationTimestamp",
+]
+
+# ─────────────────────────────── LOGGING ─────────────────────────────── #
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+log = logging.getLogger("idx_server")
+
+# ────────────────────────────── DATABASE ────────────────────────────── #
+
+def get_conn():
+    return psycopg2.connect(dsn=DB_DSN, cursor_factory=psycopg2.extras.RealDictCursor)
+
+def init_db():
+    cols = ",\n    ".join(f"{f.lower()} TEXT" for f in FIELD_MAP)
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS listings (
+                id SERIAL PRIMARY KEY,
+                listing_key TEXT UNIQUE,
+                {cols},
+                data JSONB NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+            CREATE INDEX IF NOT EXISTS listings_gin ON listings USING GIN (data);
+            """
+        )
+    log.info("Database ready.")
+
+# ────────────────────────────── ETL STEPS ───────────────────────────── #
+
+def fetch_listing_file() -> io.StringIO:
+    """
+    Connects to FTP and downloads the listing file into an in-memory buffer.
+    """
+    buffer = io.BytesIO()
+    with ftplib.FTP(FTP_HOST) as ftp:
+        ftp.login(FTP_USER, FTP_PASS)
+        ftp.cwd(FTP_LISTINGS_DIR)
+        log.info("Downloading %s …", LISTING_FILE)
+        ftp.retrbinary(f"RETR {LISTING_FILE}", buffer.write)
+    buffer.seek(0)
+    # MLS PIN files are usually pipe-delimited; ensure correct encoding
+    return io.StringIO(buffer.read().decode("utf-8", errors="ignore"))
+
+def parse_rows(fh: io.StringIO) -> List[Dict[str, Any]]:
+    reader = csv.DictReader(fh, delimiter="|")
+    rows = []
+    for row in reader:
+        if not row.get("ListingKey"):
+            continue
+        rows.append(row)
+    log.info("Parsed %s rows from file.", len(rows))
+    return rows
+
+def upsert_rows(rows: List[Dict[str, Any]]):
+    if not rows:
+        return
+    cols = ["listing_key"] + [f.lower() for f in FIELD_MAP] + ["data"]
+    template = ", ".join(["%s"] * len(cols))
+    records = []
+    for r in rows:
+        record = [r.get("ListingKey")]
+        record += [r.get(f, None) for f in FIELD_MAP]
+        record.append(Json(r))
+        records.append(record)
+
+    query = f"""
+        INSERT INTO listings ({', '.join(cols)})
+        VALUES {template}
+        ON CONFLICT (listing_key)
+        DO UPDATE SET
+            {', '.join(f"{c}=EXCLUDED.{c}" for c in cols[1:])},
+            updated_at = now();
+    """
+    with get_conn() as conn, conn.cursor() as cur:
+        for i in range(0, len(records), BATCH_SIZE):
+            batch = records[i : i + BATCH_SIZE]
+            execute_values(
+                cur,
+                query,
+                batch,
+                template="(" + template + ")",
+            )
+    log.info("Upserted %s rows.", len(records))
+
+def insert_sample_data():
+    """Insert some sample data for testing when FTP is not available"""
+    sample_listings = [
+        {
+            "ListingKey": "MA001",
+            "ListingID": "2001",
+            "ListPrice": "650000",
+            "StreetName": "Main Street",
+            "City": "Boston",
+            "StateOrProvince": "MA",
+            "PostalCode": "02101",
+            "BedroomsTotal": "3",
+            "BathroomsTotalInteger": "2",
+            "LivingArea": "1800",
+            "Latitude": "42.3601",
+            "Longitude": "-71.0589",
+            "ListingStatus": "Active",
+            "ModificationTimestamp": datetime.now().isoformat()
+        },
+        {
+            "ListingKey": "MA002",
+            "ListingID": "2002",
+            "ListPrice": "850000",
+            "StreetName": "Commonwealth Avenue",
+            "City": "Cambridge",
+            "StateOrProvince": "MA",
+            "PostalCode": "02139",
+            "BedroomsTotal": "4",
+            "BathroomsTotalInteger": "3",
+            "LivingArea": "2200",
+            "Latitude": "42.3736",
+            "Longitude": "-71.1097",
+            "ListingStatus": "Active",
+            "ModificationTimestamp": datetime.now().isoformat()
+        },
+        {
+            "ListingKey": "MA003",
+            "ListingID": "2003",
+            "ListPrice": "425000",
+            "StreetName": "Oak Street",
+            "City": "Dracut",
+            "StateOrProvince": "MA",
+            "PostalCode": "01826",
+            "BedroomsTotal": "2",
+            "BathroomsTotalInteger": "1",
+            "LivingArea": "1200",
+            "Latitude": "42.6701",
+            "Longitude": "-71.3023",
+            "ListingStatus": "Active",
+            "ModificationTimestamp": datetime.now().isoformat()
+        }
+    ]
+    
+    cols = ["listing_key"] + [f.lower() for f in FIELD_MAP] + ["data"]
+    records = []
+    for r in sample_listings:
+        record = [r.get("ListingKey")]
+        record += [r.get(f, None) for f in FIELD_MAP]
+        record.append(Json(r))
+        records.append(record)
+    
+    template = ", ".join(["%s"] * len(cols))
+    query = f"""
+        INSERT INTO listings ({', '.join(cols)})
+        VALUES ({template})
+        ON CONFLICT (listing_key)
+        DO UPDATE SET
+            {', '.join(f"{c}=EXCLUDED.{c}" for c in cols[1:])},
+            updated_at = now();
+    """
+    
+    with get_conn() as conn, conn.cursor() as cur:
+        for record in records:
+            cur.execute(query, record)
+    log.info("Sample data inserted (%s listings).", len(records))
+
+def etl_job():
+    try:
+        if not FTP_HOST or not FTP_USER or not FTP_PASS or FTP_USER == "YOUR_FTP_USERNAME":
+            log.warning("FTP credentials not configured. Using sample data instead.")
+            insert_sample_data()
+            return
+            
+        fh = fetch_listing_file()
+        rows = parse_rows(fh)
+        upsert_rows(rows)
+        if DOWNLOAD_PHOTOS:
+            log.warning("Photo download not yet implemented – set DOWNLOAD_PHOTOS=false or extend here.")
+    except Exception as e:
+        log.warning("ETL job failed: %s. Using sample data instead.", e)
+        insert_sample_data()
+
+# ──────────────────────────────── API ───────────────────────────────── #
+
+app = FastAPI(
+    title="Free IDX API (MLS PIN)",
+    version="0.1.0",
+    description="Minimal RESO-like API fed by free MLS PIN manual download.",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+class Listing(BaseModel):
+    listing_key: str
+    data: Dict[str, Any]
+    # Dynamically add any typed fields you promoted
+    class Config:
+        extra = "allow"
+
+@app.get("/listings", response_model=List[Listing])
+def list_listings(
+    city: Optional[str] = Query(None),
+    state: Optional[str] = Query(None, alias="state"),
+    min_price: Optional[int] = Query(None, ge=0),
+    max_price: Optional[int] = Query(None, ge=0),
+    limit: int = Query(50, gt=0, le=500),
+    offset: int = Query(0, ge=0),
+):
+    where, params = [], []
+    if city:
+        where.append("data->>'City' ILIKE %s")
+        params.append(f"%{city}%")
+    if state:
+        where.append("data->>'StateOrProvince' = %s")
+        params.append(state)
+    if min_price is not None:
+        where.append("(data->>'ListPrice')::int >= %s")
+        params.append(min_price)
+    if max_price is not None:
+        where.append("(data->>'ListPrice')::int <= %s")
+        params.append(max_price)
+
+    where_sql = "WHERE " + " AND ".join(where) if where else ""
+    sql = f"""
+        SELECT listing_key, data, updated_at
+        FROM listings
+        {where_sql}
+        ORDER BY updated_at DESC
+        LIMIT %s OFFSET %s
+    """
+    params.extend([limit, offset])
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+    return rows
+
+@app.get("/listings/{listing_key}", response_model=Listing)
+def get_listing(listing_key: str):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT listing_key, data, updated_at FROM listings WHERE listing_key = %s",
+            (listing_key,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Listing not found")
+    return row
+
+# ───────────────────────────── SCHEDULER ────────────────────────────── #
+
+def start_scheduler():
+    try:
+        sched = AsyncIOScheduler(timezone="UTC")
+        cron_parts = SCHEDULE_CRON.split()
+        cron_kwargs = {}
+        field_names = ["minute", "hour", "day", "month", "day_of_week"]
+        
+        for field, value in zip(field_names, cron_parts):
+            if value != "*":
+                cron_kwargs[field] = int(value)
+        
+        sched.add_job(etl_job, "cron", **cron_kwargs)
+        sched.start()
+        log.info("Scheduler started (%s).", SCHEDULE_CRON)
+    except Exception as e:
+        log.warning("Scheduler failed to start: %s. Continuing without scheduler.", e)
+
+# ─────────────────────────────── main ──────────────────────────────── #
+
+def main():
+    init_db()
+    etl_job()                    # immediate first load
+    start_scheduler()
+    uvicorn.run(app, host=API_HOST, port=API_PORT)
+
+if __name__ == "__main__":
+    main()
+
+# ────────────────────────── requirements.txt ────────────────────────── #
+"""
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+psycopg2-binary==2.9.9
+python-dotenv==1.0.1
+apscheduler==3.10.4
+pydantic==2.7.1
+"""
+
+# ─────────────────────────── .env TEMPLATE ─────────────────────────── #
+"""
+# FTP creds from MLS PIN “Manual Download” agreement
+FTP_HOST=ftp.mlspin.com
+FTP_USER=YOUR_FTP_USERNAME
+FTP_PASS=YOUR_FTP_PASSWORD
+FTP_LISTINGS_DIR=/  # leave as "/" unless MLS PIN tells you otherwise
+LISTING_FILE=LISTINGS.TXT
+
+# Postgres (example)
+DATABASE_URL=postgresql://idx_user:idx_pass@localhost:5432/idx
+
+# Set to "true" only after you implement photo ingestion
+DOWNLOAD_PHOTOS=false
+"""

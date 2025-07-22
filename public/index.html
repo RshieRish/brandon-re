@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brandon Sweeney - Your Dracut Realtor | SWS & Co.</title>
+    <meta name="description" content="Brandon Sweeney, Your Dracut Realtor. Professional real estate services in Dracut, MA and surrounding areas. SWS & Co.">
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <h2>SWS & Co.</h2>
+                <span class="tagline">Your Dracut Realtor</span>
+            </div>
+            <div class="nav-menu">
+                <a href="#home" class="nav-link">Home</a>
+                <a href="#listings" class="nav-link">Listings</a>
+                <a href="#about" class="nav-link">About</a>
+                <a href="#contact" class="nav-link">Contact</a>
+                <a href="admin.html" class="nav-link admin-link">Admin</a>
+            </div>
+            <div class="nav-contact">
+                <a href="tel:978-987-2806" class="phone-btn">
+                    <i class="fas fa-phone"></i> (978) 987-2806
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section id="home" class="hero">
+        <div class="hero-video">
+            <video id="heroVideo" autoplay muted loop playsinline webkit-playsinline preload="auto" poster="" style="width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; z-index: -2;">
+                <source src="https://cdn-cf-east.streamable.com/video/mp4/zn3xjt.mp4?Expires=1753465161171&Key-Pair-Id=APKAIEYUVEN4EVB2OKEQ&Signature=EZk2Hd4srM8V6lW7ximgXMyv163s1zI8dL8AvbJltxREe10Ww4Q1f~q~tTvIIsc2AiZ-jv2A21fByMz0XVgYWsoTyjuAwYZ9lPoz3ZGu0QgXdEEJz8CosMlXrVR8Ngm1UguwTxpWfCdVCVMkj6pYYP1SM6aTn6AuVUggnez-H38653lSRBKsNgCs1aGerSyT28lBiuwB3FNlsKurc16ibkYg4rgf1GopsTjqi9eiy~YB2Mio2uJOeDytfqqM5-Uw2RQxbeD2T8YhcjfJDufaDpKWJSyb-cyb21lA1txpaJOrRp3B1v-TxpIpAeJsGz2NDDJPQYwW~ETKvAlU6~LKgA__" type="video/mp4">
+                <source src="video_optimized.mp4" type="video/mp4">
+                <source src="Video_Loop_Generation_Confirmed.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            <div class="hero-overlay"></div>
+        </div>
+        <div class="hero-content">
+            <h1>Brandon Sweeney</h1>
+            <h2 class="hero-tagline">Your Dracut Realtor</h2>
+            <p class="hero-description">Professional real estate services in Dracut, Massachusetts and surrounding areas. Let me help you find your dream home or sell your property with confidence.</p>
+            <div class="hero-buttons">
+                <a href="#listings" class="btn btn-primary">View Listings</a>
+                <a href="#contact" class="btn btn-secondary">Get In Touch</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Listings Section -->
+    <section id="listings" class="listings-section">
+        <div class="container">
+            <h2>Featured Properties</h2>
+            <div class="search-filters">
+                <div class="filter-group">
+                    <input type="text" id="cityFilter" placeholder="City (e.g., Dracut)" class="filter-input">
+                    <input type="number" id="minPrice" placeholder="Min Price" class="filter-input">
+                    <input type="number" id="maxPrice" placeholder="Max Price" class="filter-input">
+                    <select id="bedrooms" class="filter-input">
+                        <option value="">Any Bedrooms</option>
+                        <option value="1">1+</option>
+                        <option value="2">2+</option>
+                        <option value="3">3+</option>
+                        <option value="4">4+</option>
+                    </select>
+                    <button id="searchBtn" class="btn btn-primary">Search</button>
+                </div>
+            </div>
+            <div id="listingsGrid" class="listings-grid">
+                <!-- Listings will be loaded here -->
+            </div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section id="about" class="about-section">
+        <div class="container">
+            <div class="about-content">
+                <div class="about-text">
+                    <h2>About Brandon Sweeney</h2>
+                    <h3>Your Dracut Realtor</h3>
+                    <p>With years of experience in the Dracut and Greater Lowell real estate market, Brandon Sweeney brings unparalleled expertise and dedication to every transaction. As your local Dracut realtor, I understand the unique character of our community and the specific needs of buyers and sellers in our area.</p>
+                    <p>At SWS & Co., we pride ourselves on providing personalized service, market expertise, and unwavering commitment to our clients' success. Whether you're buying your first home, upgrading to your dream property, or selling your current residence, I'm here to guide you through every step of the process.</p>
+                    <div class="credentials">
+                        <div class="credential">
+                            <i class="fas fa-award"></i>
+                            <span>Licensed Real Estate Professional</span>
+                        </div>
+                        <div class="credential">
+                            <i class="fas fa-home"></i>
+                            <span>Dracut Market Specialist</span>
+                        </div>
+                        <div class="credential">
+                            <i class="fas fa-handshake"></i>
+                            <span>Client-Focused Service</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="about-image">
+                    <img src="https://via.placeholder.com/400x500/000000/FFD700?text=Brandon+Sweeney" alt="Brandon Sweeney">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Section -->
+    <section id="contact" class="contact-section">
+        <div class="container">
+            <h2>Get In Touch</h2>
+            <div class="contact-content">
+                <div class="contact-info">
+                    <div class="contact-item">
+                        <i class="fas fa-phone"></i>
+                        <div>
+                            <h4>Phone</h4>
+                            <a href="tel:978-987-2806">(978) 987-2806</a>
+                        </div>
+                    </div>
+                    <div class="contact-item">
+                        <i class="fas fa-envelope"></i>
+                        <div>
+                            <h4>Email</h4>
+                            <a href="mailto:info@solidwithsweeney.com">info@solidwithsweeney.com</a>
+                        </div>
+                    </div>
+                    <div class="contact-item">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <div>
+                            <h4>Service Area</h4>
+                            <p>Dracut, MA & Surrounding Areas</p>
+                        </div>
+                    </div>
+                </div>
+                <form class="contact-form" id="contactForm">
+                    <div class="form-group">
+                        <input type="text" id="name" name="name" placeholder="Your Name" required>
+                    </div>
+                    <div class="form-group">
+                        <input type="email" id="email" name="email" placeholder="Your Email" required>
+                    </div>
+                    <div class="form-group">
+                        <input type="tel" id="phone" name="phone" placeholder="Your Phone">
+                    </div>
+                    <div class="form-group">
+                        <select id="inquiryType" name="inquiryType" required>
+                            <option value="">Select Inquiry Type</option>
+                            <option value="buying">Buying a Home</option>
+                            <option value="selling">Selling a Home</option>
+                            <option value="market-analysis">Market Analysis</option>
+                            <option value="general">General Question</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <textarea id="message" name="message" placeholder="Your Message" rows="5" required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Send Message</button>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>SWS & Co.</h3>
+                    <p>Your Dracut Realtor</p>
+                    <p>Professional real estate services in Dracut, MA and surrounding areas.</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Contact</h4>
+                    <p><i class="fas fa-phone"></i> (978) 987-2806</p>
+                    <p><i class="fas fa-envelope"></i> info@solidwithsweeney.com</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Service Areas</h4>
+                    <p>Dracut, Lowell, Tyngsborough, Pelham, Methuen, and surrounding communities</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 SWS & Co. - Brandon Sweeney, Your Dracut Realtor. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- AI Chatbot Widget -->
+    <div id="chatbot-widget" class="chatbot-widget">
+        <div class="chatbot-toggle" id="chatbotToggle">
+            <i class="fas fa-comments"></i>
+        </div>
+        <div class="chatbot-window" id="chatbotWindow">
+            <div class="chatbot-header">
+                <h4>Ask Brandon</h4>
+                <button class="chatbot-close" id="chatbotClose">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="chatbot-messages" id="chatbotMessages">
+                <div class="message bot-message">
+                    <p>Hi! I'm Brandon's AI assistant. How can I help you with your real estate needs in Dracut today?</p>
+                </div>
+            </div>
+            <div class="chatbot-input">
+                <input type="text" id="chatbotInput" placeholder="Type your message...">
+                <button id="chatbotSend">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
