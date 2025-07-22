@@ -99,9 +99,13 @@ app.use('*', (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`🏠 Real Estate Backend Server running on port ${PORT}`);
-  console.log(`📍 Serving Massachusetts real estate listings via IDX`);
-});
-
+// Export app for serverless deployment
 module.exports = app;
+
+// Start server only if not in serverless environment
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`🏠 Real Estate Backend Server running on port ${PORT}`);
+    console.log(`📍 Serving Massachusetts real estate listings via IDX`);
+  });
+}
