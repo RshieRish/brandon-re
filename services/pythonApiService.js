@@ -1,8 +1,10 @@
 const axios = require('axios');
+const mockDataService = require('./mockDataService');
 
 class PythonApiService {
   constructor() {
-    this.baseURL = 'http://localhost:8000';
+    this.baseURL = process.env.PYTHON_API_URL || 'http://localhost:8000';
+    this.useFallback = process.env.NODE_ENV === 'production' && !process.env.PYTHON_API_URL;
     this.client = axios.create({
       baseURL: this.baseURL,
       timeout: 10000,
@@ -10,9 +12,17 @@ class PythonApiService {
         'Content-Type': 'application/json'
       }
     });
+    
+    if (this.useFallback) {
+      console.log('🔄 Python API not available in production, using mock data fallback');
+    }
   }
 
   async getListings(filters = {}) {
+    if (this.useFallback) {
+      return await mockDataService.getListings(filters);
+    }
+    
     try {
       const params = new URLSearchParams();
       
@@ -29,12 +39,16 @@ class PythonApiService {
       const response = await this.client.get(`/listings?${params.toString()}`);
       return response.data || [];
     } catch (error) {
-      console.error('Error fetching listings from Python API:', error.message);
-      return [];
+      console.error('Error fetching listings from Python API, falling back to mock data:', error.message);
+      return await mockDataService.getListings(filters);
     }
   }
 
   async getListingById(mlsId) {
+    if (this.useFallback) {
+      return await mockDataService.getListingById(mlsId);
+    }
+    
     try {
       const response = await this.client.get(`/listings/${mlsId}`);
       return response.data;
@@ -42,23 +56,31 @@ class PythonApiService {
       if (error.response?.status === 404) {
         return null;
       }
-      console.error('Error fetching listing by ID from Python API:', error.message);
-      return null;
+      console.error('Error fetching listing by ID from Python API, falling back to mock data:', error.message);
+      return await mockDataService.getListingById(mlsId);
     }
   }
 
   async getFeaturedListings() {
+    if (this.useFallback) {
+      return await mockDataService.getFeaturedListings();
+    }
+    
     try {
       // Get first 6 listings as featured
       const response = await this.client.get('/listings?limit=6');
       return response.data || [];
     } catch (error) {
-      console.error('Error fetching featured listings from Python API:', error.message);
-      return [];
+      console.error('Error fetching featured listings from Python API, falling back to mock data:', error.message);
+      return await mockDataService.getFeaturedListings();
     }
   }
 
   async advancedSearch(searchCriteria) {
+    if (this.useFallback) {
+      return await mockDataService.advancedSearch(searchCriteria);
+    }
+    
     try {
       const params = new URLSearchParams();
       
@@ -76,20 +98,24 @@ class PythonApiService {
       const response = await this.client.get(`/listings?${params.toString()}`);
       return response.data || [];
     } catch (error) {
-      console.error('Error performing advanced search on Python API:', error.message);
-      return [];
+      console.error('Error performing advanced search on Python API, falling back to mock data:', error.message);
+      return await mockDataService.advancedSearch(searchCriteria);
     }
   }
 
   async getNearbyListings(latitude, longitude, radius = 5) {
+    if (this.useFallback) {
+      return await mockDataService.getNearbyListings(latitude, longitude, radius);
+    }
+    
     try {
       // For now, return general listings since our Python API doesn't have geo search
       // This could be enhanced later with geographic filtering
       const response = await this.client.get('/listings?limit=20');
       return response.data || [];
     } catch (error) {
-      console.error('Error fetching nearby listings from Python API:', error.message);
-      return [];
+      console.error('Error fetching nearby listings from Python API, falling back to mock data:', error.message);
+      return await mockDataService.getNearbyListings(latitude, longitude, radius);
     }
   }
 
@@ -106,6 +132,10 @@ class PythonApiService {
 
   // Health check method
   async healthCheck() {
+    if (this.useFallback) {
+      return { status: 'ok', message: 'Using mock data fallback' };
+    }
+    
     try {
       const response = await this.client.get('/health');
       return response.data;
