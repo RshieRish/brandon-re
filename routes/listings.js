@@ -10,7 +10,7 @@ const { searchLimiter } = require('../middleware');
 const dataService = pythonApiService;
 
 console.log('🔧 Using PYTHON API data service for real MLS data');
-console.log('📡 Connecting to Python API at http://localhost:8000');
+console.log('📡 Connecting to Python API at', process.env.PYTHON_API_URL || 'http://localhost:8000');
 
 // Health check for Python API
 pythonApiService.healthCheck().then(health => {
