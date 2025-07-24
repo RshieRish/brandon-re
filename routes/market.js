@@ -1,9 +1,14 @@
 const express = require('express');
 const router = express.Router();
-// Use mock data service for free operation
-const mockDataService = require('../services/mockDataService');
-// const idxService = require('../services/idxService'); // Uncomment for real IDX API
 const { isValidMassachusettsCity } = require('../utils/helpers');
+const mockDataService = require('../services/mockDataService');
+const idxService = require('../services/idxService');
+
+// Determine which service to use based on environment
+const useRealData = process.env.IDX_API_KEY && process.env.IDX_PARTNER_KEY && process.env.NODE_ENV === 'production';
+const dataService = useRealData ? new idxService() : mockDataService;
+
+console.log(`🔧 Market using ${useRealData ? 'REAL IDX' : 'MOCK'} data service`);
 
 // Get market statistics
 router.get('/stats', async (req, res) => {
@@ -18,7 +23,7 @@ router.get('/stats', async (req, res) => {
       });
     }
 
-    const stats = await mockDataService.getMarketStats(city);
+    const stats = await dataService.getMarketStats(city);
     
     res.json({
       success: true,
@@ -40,7 +45,7 @@ router.get('/stats', async (req, res) => {
 // Get cities in Massachusetts
 router.get('/cities', async (req, res) => {
   try {
-    const cities = await mockDataService.getCities();
+    const cities = await dataService.getCities();
     
     res.json({
       success: true,
@@ -60,7 +65,7 @@ router.get('/cities', async (req, res) => {
 // Get property types
 router.get('/property-types', async (req, res) => {
   try {
-    const propertyTypes = await mockDataService.getPropertyTypes();
+    const propertyTypes = await dataService.getPropertyTypes();
     
     res.json({
       success: true,
@@ -89,7 +94,7 @@ router.get('/trends', async (req, res) => {
     }
 
     // Get recent sold listings for trend analysis
-    const soldListings = await mockDataService.getSoldListings({
+    const soldListings = await dataService.getSoldListings({
       city,
       propertyType,
       daysBack: parseInt(period)
@@ -131,7 +136,7 @@ router.get('/price-distribution', async (req, res) => {
     }
 
     // Get current listings for price distribution
-    const listings = await mockDataService.getListings({
+    const listings = await dataService.getListings({
       city,
       propertyType,
       limit: 1000 // Get more listings for better distribution analysis

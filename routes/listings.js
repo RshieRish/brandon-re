@@ -1,8 +1,23 @@
 const express = require('express');
 const router = express.Router();
 const mockDataService = require('../services/mockDataService');
+const idxService = require('../services/idxService');
+const pythonApiService = require('../services/pythonApiService');
 const { validateSearchParams, getPaginationInfo } = require('../utils/helpers');
 const { searchLimiter } = require('../middleware');
+
+// Use Python API service for real MLS data
+const dataService = pythonApiService;
+
+console.log('🔧 Using PYTHON API data service for real MLS data');
+console.log('📡 Connecting to Python API at http://localhost:8000');
+
+// Health check for Python API
+pythonApiService.healthCheck().then(health => {
+  console.log('🏥 Python API Health:', health.status || 'OK');
+}).catch(err => {
+  console.warn('⚠️  Python API health check failed:', err.message);
+});
 
 // Get all listings with filters
 router.get('/', async (req, res) => {
@@ -18,7 +33,7 @@ router.get('/', async (req, res) => {
       bathrooms: bathrooms ? parseInt(bathrooms) : undefined
     };
     
-    const listings = await mockDataService.getListings(filters);
+    const listings = await dataService.getListings(filters);
     const { paginatedData, pagination } = getPaginationInfo(listings, page, limit);
     
     res.json({
@@ -37,11 +52,31 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Get featured listings (must be before /:mlsId route)
+router.get('/featured/all', async (req, res) => {
+  try {
+    const featuredListings = await dataService.getFeaturedListings();
+    
+    res.json({
+      success: true,
+      data: {
+        data: featuredListings
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching featured listings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Unable to load featured listings at this time'
+    });
+  }
+});
+
 // Get single listing by MLS ID
 router.get('/:mlsId', async (req, res) => {
   try {
     const { mlsId } = req.params;
-    const listing = await mockDataService.getListingById(mlsId);
+    const listing = await dataService.getListingById(mlsId);
     
     if (!listing) {
       return res.status(404).json({
@@ -67,7 +102,7 @@ router.get('/:mlsId', async (req, res) => {
 router.get('/:mlsId/photos', async (req, res) => {
   try {
     const { mlsId } = req.params;
-    const listing = await mockDataService.getListingById(mlsId);
+    const listing = await dataService.getListingById(mlsId);
     
     if (!listing) {
       return res.status(404).json({
@@ -91,23 +126,7 @@ router.get('/:mlsId/photos', async (req, res) => {
   }
 });
 
-// Get featured listings
-router.get('/featured/all', async (req, res) => {
-  try {
-    const featuredListings = await mockDataService.getFeaturedListings();
-    
-    res.json({
-      success: true,
-      data: featuredListings
-    });
-  } catch (error) {
-    console.error('Error fetching featured listings:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Unable to load featured listings at this time'
-    });
-  }
-});
+
 
 // Advanced search with rate limiting
 router.post('/search', searchLimiter, async (req, res) => {
@@ -124,7 +143,7 @@ router.post('/search', searchLimiter, async (req, res) => {
       });
     }
 
-    const results = await mockDataService.advancedSearch(searchCriteria);
+    const results = await dataService.advancedSearch(searchCriteria);
     
     res.json({
       success: true,
@@ -169,7 +188,7 @@ router.get('/nearby/:latitude/:longitude', async (req, res) => {
       });
     }
 
-    const listings = await mockDataService.getNearbyListings(lat, lng, parseInt(radius));
+    const listings = await dataService.getNearbyListings(lat, lng, parseInt(radius));
     
     res.json({
       success: true,
@@ -209,7 +228,7 @@ router.get('/sold/recent', async (req, res) => {
       daysBack: parseInt(daysBack)
     };
 
-    const soldListings = await mockDataService.getSoldListings(filters);
+    const soldListings = await dataService.getSoldListings(filters);
     
     res.json({
       success: true,

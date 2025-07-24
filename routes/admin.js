@@ -1,7 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const mockDataService = require('../services/mockDataService');
+const idxService = require('../services/idxService');
 const { validateApiKey } = require('../middleware');
+
+// Determine which service to use based on environment
+const useRealData = process.env.IDX_API_KEY && process.env.IDX_PARTNER_KEY && process.env.NODE_ENV === 'production';
+const dataService = useRealData ? new idxService() : mockDataService;
+
+console.log(`🔧 Admin using ${useRealData ? 'REAL IDX' : 'MOCK'} data service`);
 
 // Demo credentials (in production, use proper authentication)
 const ADMIN_CREDENTIALS = {
@@ -97,7 +104,7 @@ router.get('/health', (req, res) => {
     memory: process.memoryUsage(),
     environment: process.env.NODE_ENV || 'development',
     version: process.env.npm_package_version || '1.0.0',
-    cache: mockDataService.getCacheStats(),
+    cache: dataService.getCacheStats ? dataService.getCacheStats() : 'N/A',
     idx: {
       configured: !!(process.env.IDX_API_KEY && process.env.IDX_PARTNER_KEY),
       baseUrl: process.env.IDX_API_URL || 'https://api.idxbroker.com'
@@ -113,7 +120,7 @@ router.get('/health', (req, res) => {
 // Get cache statistics
 router.get('/cache/stats', (req, res) => {
   try {
-    const stats = mockDataService.getCacheStats();
+    const stats = dataService.getCacheStats ? dataService.getCacheStats() : {};
     
     res.json({
       success: true,
@@ -133,7 +140,9 @@ router.get('/cache/stats', (req, res) => {
 // Clear all caches
 router.post('/cache/clear', (req, res) => {
   try {
-    mockDataService.clearCache();
+    if (dataService.clearCache) {
+      dataService.clearCache();
+    }
     
     res.json({
       success: true,
@@ -151,12 +160,12 @@ router.post('/cache/clear', (req, res) => {
 // Test IDX API connection
 router.get('/test/idx-connection', async (req, res) => {
   try {
-    // Test mock data service
-    const testResult = await mockDataService.getCities();
+    // Test data service connection
+    const testResult = await dataService.getCities();
     
     res.json({
       success: true,
-      message: 'Mock data service connection successful',
+      message: `${useRealData ? 'IDX API' : 'Mock data service'} connection successful`,
       data: {
         connected: true,
         responseTime: Date.now(),
@@ -166,7 +175,7 @@ router.get('/test/idx-connection', async (req, res) => {
   } catch (error) {
     res.status(503).json({
       success: false,
-      message: 'Mock data service connection failed',
+      message: `${useRealData ? 'IDX API' : 'Mock data service'} connection failed`,
       error: error.message,
       data: {
         connected: false,
@@ -193,7 +202,7 @@ router.get('/config', (req, res) => {
     },
     cache: {
       enabled: true,
-      stats: mockDataService.getCacheStats()
+      stats: dataService.getCacheStats ? dataService.getCacheStats() : {}
     }
   };
 
@@ -212,7 +221,7 @@ router.get('/stats/usage', (req, res) => {
     memoryUsage: process.memoryUsage(),
     cpuUsage: process.cpuUsage(),
     timestamp: new Date().toISOString(),
-    cache: mockDataService.getCacheStats(),
+    cache: dataService.getCacheStats ? dataService.getCacheStats() : {},
     note: 'Detailed usage statistics require analytics integration'
   };
 
@@ -282,13 +291,13 @@ router.post('/cache/refresh/:type', async (req, res) => {
 
     switch (type) {
       case 'cities':
-        result = await mockDataService.getCities();
+        result = await dataService.getCities();
         break;
       case 'property-types':
-        result = await mockDataService.getPropertyTypes();
+        result = await dataService.getPropertyTypes();
         break;
       case 'featured':
-        result = await mockDataService.getFeaturedListings();
+        result = await dataService.getFeaturedListings();
         break;
       default:
         return res.status(400).json({

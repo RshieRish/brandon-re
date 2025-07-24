@@ -181,8 +181,8 @@ async function loadFeaturedListings() {
         const response = await fetch(`${API_BASE_URL}/listings/featured/all`);
         const data = await response.json();
         
-        if (data.success && data.data && data.data.data) {
-            displayListings(data.data.data);
+        if (data.success && data.data) {
+            displayListings(data.data);
         } else {
             // Fallback to regular listings if featured not available
             await loadRegularListings();
@@ -199,8 +199,8 @@ async function loadRegularListings() {
         const response = await fetch(`${API_BASE_URL}/listings?limit=6`);
         const data = await response.json();
         
-        if (data.success && data.data && data.data.data) {
-            displayListings(data.data.data);
+        if (data.success && data.data) {
+            displayListings(data.data);
         } else {
             showError('Unable to load listings at this time.');
         }
@@ -263,20 +263,17 @@ function displayListings(listings) {
 
 // Create listing card HTML
 function createListingCard(listing) {
-    const price = listing.price?.formatted || formatPrice(listing.listPrice || listing.price?.amount);
-    const address = listing.address ? 
-        `${listing.address.street}, ${listing.address.city}, ${listing.address.state} ${listing.address.zipCode}` :
-        `${listing.address}, ${listing.cityName}, ${listing.state} ${listing.zipcode}`;
-    const bedrooms = listing.property?.bedrooms || listing.bedrooms || 'N/A';
-    const bathrooms = listing.property?.bathrooms || listing.totalBaths || 'N/A';
-    const sqft = listing.property?.squareFeetFormatted || 
-        (listing.sqFt ? formatNumber(listing.sqFt) : 
-        (listing.property?.squareFeet ? formatNumber(listing.property.squareFeet) : 'N/A'));
-    const image = listing.images?.featured || listing.featuredImage || 'https://via.placeholder.com/400x300/000000/FFD700?text=Property+Image';
-    const mlsId = listing.mlsNumber || listing.id || 'unknown';
-    const description = listing.description || 
-        (listing.remarksConcat ? listing.remarksConcat.substring(0, 100) + '...' : 
-        `Beautiful property in ${listing.address?.city || listing.cityName}`);
+    // Access data from the nested structure
+    const data = listing.data || listing;
+    
+    const price = formatPrice(data.LIST_PRICE || data.ListPrice || data.listPrice || 0);
+    const address = `${data.STREET_NO || ''} ${data.STREET_NAME || data.StreetName || ''}, ${data.City === '1' ? 'Boston' : data.City || ''}, ${data.STATE || data.StateOrProvince || 'MA'} ${data.ZIP_CODE || data.PostalCode || ''}`;
+    const bedrooms = data.NO_BEDROOMS || data.BedroomsTotal || 'N/A';
+    const bathrooms = data.NO_FULL_BATHS || data.BathroomsTotalInteger || 'N/A';
+    const sqft = data.SQUARE_FEET || data.LivingArea || data.AboveGradeFinishedArea || 'N/A';
+    const image = 'https://via.placeholder.com/400x300/000000/FFD700?text=Property+Image';
+    const mlsId = listing.listing_key || data.LIST_NO || data.ListingID || data.ListingKey || 'unknown';
+    const description = data.REMARKS ? data.REMARKS.substring(0, 150) + '...' : `Beautiful property in ${data.City === '1' ? 'Boston' : data.City || 'Boston'}`;
     
     return `
         <div class="listing-card" data-mls-id="${mlsId}">
@@ -295,7 +292,7 @@ function createListingCard(listing) {
                     </div>
                     <div class="listing-detail">
                         <i class="fas fa-ruler-combined"></i>
-                        <span>${sqft} sqft</span>
+                        <span>${formatNumber(sqft)} sqft</span>
                     </div>
                 </div>
                 <div class="listing-description">

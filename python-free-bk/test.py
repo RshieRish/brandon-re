@@ -43,7 +43,7 @@ PHOTO_DIR       = os.getenv("PHOTO_DIR", "/photos")   # if you need photos
 DOWNLOAD_PHOTOS = os.getenv("DOWNLOAD_PHOTOS", "false").lower() == "true"
 
 DB_DSN          = os.getenv("DATABASE_URL")  # postgres://user:pass@host:5432/db
-BATCH_SIZE      = int(os.getenv("UPSERT_BATCH_SIZE", "1000"))
+BATCH_SIZE      = int(os.getenv("UPSERT_BATCH_SIZE", "100"))
 SCHEDULE_CRON   = os.getenv("CRON_EXPR", "0 2 * * *")  # every day 02:00 local
 
 API_HOST        = os.getenv("API_HOST", "0.0.0.0")
@@ -103,24 +103,85 @@ def init_db():
 
 def fetch_listing_file() -> io.StringIO:
     """
-    Connects to FTP and downloads the listing file into an in-memory buffer.
+    Reads listing file from local directory (manually downloaded files).
     """
-    buffer = io.BytesIO()
-    with ftplib.FTP(FTP_HOST) as ftp:
-        ftp.login(FTP_USER, FTP_PASS)
-        ftp.cwd(FTP_LISTINGS_DIR)
-        log.info("Downloading %s …", LISTING_FILE)
-        ftp.retrbinary(f"RETR {LISTING_FILE}", buffer.write)
-    buffer.seek(0)
-    # MLS PIN files are usually pipe-delimited; ensure correct encoding
-    return io.StringIO(buffer.read().decode("utf-8", errors="ignore"))
+    # List of listing files to process (prioritizing single family homes)
+    listing_files = [
+        "idx_sf.txt",  # Single Family
+        "idx_mf.txt",  # Multi-Family
+        "idx_cc.txt",  # Condo/Coop
+        "idx_rn.txt",  # Rental
+        "idx_bu.txt",  # Business
+        "idx_ld.txt",  # Land
+        "idx_ci.txt",  # Commercial/Industrial
+        "idx_mh.txt",  # Mobile Home
+    ]
+    
+    all_content = []
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    for filename in listing_files:
+        file_path = os.path.join(script_dir, filename)
+        if os.path.exists(file_path):
+            try:
+                log.info("Reading local file: %s", filename)
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read().strip()
+                    if content:
+                        all_content.append(content)
+                        log.info("Loaded %s characters from %s", len(content), filename)
+            except Exception as e:
+                log.warning("Failed to read %s: %s", filename, e)
+                continue
+        else:
+            log.warning("File not found: %s", file_path)
+    
+    if not all_content:
+        raise FileNotFoundError("No listing files found in local directory")
+    
+    # Combine all files, handling headers properly
+    combined_lines = []
+    header_added = False
+    
+    for content in all_content:
+        lines = content.split('\n')
+        if not lines:
+            continue
+            
+        # Add header only once (from first file)
+        if not header_added:
+            combined_lines.extend(lines)
+            header_added = True
+        else:
+            # Skip header line for subsequent files
+            if len(lines) > 1:
+                combined_lines.extend(lines[1:])
+    
+    combined_content = '\n'.join(combined_lines)
+    log.info("Combined %s listing files into %s total characters", len([f for f in listing_files if os.path.exists(os.path.join(script_dir, f))]), len(combined_content))
+    
+    return io.StringIO(combined_content)
 
 def parse_rows(fh: io.StringIO) -> List[Dict[str, Any]]:
     reader = csv.DictReader(fh, delimiter="|")
     rows = []
     for row in reader:
-        if not row.get("ListingKey"):
+        # Use LIST_NO as the primary key (MLS PIN format)
+        if not row.get("LIST_NO"):
             continue
+        # Map MLS PIN fields to our expected format
+        row["ListingKey"] = row.get("LIST_NO")
+        row["ListingID"] = row.get("LIST_NO")
+        row["ListPrice"] = row.get("LIST_PRICE")
+        row["StreetName"] = row.get("STREET_NAME")
+        row["City"] = row.get("TOWN_NUM")  # Will need town lookup
+        row["StateOrProvince"] = "MA"  # MLS PIN is Massachusetts
+        row["PostalCode"] = row.get("ZIP_CODE")
+        row["BedroomsTotal"] = row.get("NO_BEDROOMS")
+        row["BathroomsTotalInteger"] = row.get("NO_FULL_BATHS")
+        row["LivingArea"] = row.get("SQUARE_FEET")
+        row["ListingStatus"] = row.get("STATUS")
+        row["ModificationTimestamp"] = datetime.now().isoformat()
         rows.append(row)
     log.info("Parsed %s rows from file.", len(rows))
     return rows
@@ -129,7 +190,6 @@ def upsert_rows(rows: List[Dict[str, Any]]):
     if not rows:
         return
     cols = ["listing_key"] + [f.lower() for f in FIELD_MAP] + ["data"]
-    template = ", ".join(["%s"] * len(cols))
     records = []
     for r in rows:
         record = [r.get("ListingKey")]
@@ -137,23 +197,30 @@ def upsert_rows(rows: List[Dict[str, Any]]):
         record.append(Json(r))
         records.append(record)
 
+    # Use execute_values with proper template
     query = f"""
         INSERT INTO listings ({', '.join(cols)})
-        VALUES {template}
+        VALUES %s
         ON CONFLICT (listing_key)
         DO UPDATE SET
             {', '.join(f"{c}=EXCLUDED.{c}" for c in cols[1:])},
-            updated_at = now();
+            updated_at = now()
     """
+    
     with get_conn() as conn, conn.cursor() as cur:
+        total_batches = (len(records) + BATCH_SIZE - 1) // BATCH_SIZE
         for i in range(0, len(records), BATCH_SIZE):
+            batch_num = (i // BATCH_SIZE) + 1
             batch = records[i : i + BATCH_SIZE]
+            log.info("Processing batch %s/%s (%s records)", batch_num, total_batches, len(batch))
             execute_values(
                 cur,
                 query,
                 batch,
-                template="(" + template + ")",
+                template=None,  # Let execute_values handle the template
+                page_size=BATCH_SIZE
             )
+            log.info("Completed batch %s/%s", batch_num, total_batches)
     log.info("Upserted %s rows.", len(records))
 
 def insert_sample_data():
@@ -234,11 +301,8 @@ def insert_sample_data():
 
 def etl_job():
     try:
-        if not FTP_HOST or not FTP_USER or not FTP_PASS or FTP_USER == "YOUR_FTP_USERNAME":
-            log.warning("FTP credentials not configured. Using sample data instead.")
-            insert_sample_data()
-            return
-            
+        # Try to read from local files first (manually downloaded)
+        log.info("Starting ETL job with local files")
         fh = fetch_listing_file()
         rows = parse_rows(fh)
         upsert_rows(rows)
@@ -306,6 +370,27 @@ def list_listings(
         cur.execute(sql, params)
         rows = cur.fetchall()
     return rows
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint"""
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM listings")
+            count = cur.fetchone()[0]
+        
+        return {
+            "status": "OK",
+            "message": "Python MLS API is running",
+            "listings_count": count,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail={
+            "status": "ERROR",
+            "message": str(e),
+            "timestamp": datetime.now().isoformat()
+        })
 
 @app.get("/listings/{listing_key}", response_model=Listing)
 def get_listing(listing_key: str):
