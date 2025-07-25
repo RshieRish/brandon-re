@@ -20,6 +20,10 @@
       "dest": "/public/admin.html"
     },
     {
+      "src": "/listing.html",
+      "dest": "/public/listing.html"
+    },
+    {
       "src": "/(.*\\.(css|js|png|jpg|jpeg|gif|svg|ico|mp4))",
       "dest": "/public/$1"
     },
