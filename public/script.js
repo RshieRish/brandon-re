@@ -330,6 +330,11 @@ function appendListings(listings) {
     addLoadMoreButton();
 }
 
+// Generate MLSPin photo URL
+function generatePhotoURL(mlsId, photoNumber, width, height) {
+    return `https://media.mlspin.com/photo.aspx?mls=${mlsId}&n=${photoNumber}&w=${width}&h=${height}`;
+}
+
 // Create listing card HTML
 function createListingCard(listing) {
     // Access data from the nested structure
@@ -340,9 +345,13 @@ function createListingCard(listing) {
     const bedrooms = data.NO_BEDROOMS || data.BedroomsTotal || 'N/A';
     const bathrooms = data.NO_FULL_BATHS || data.BathroomsTotalInteger || 'N/A';
     const sqft = data.SQUARE_FEET || data.LivingArea || data.AboveGradeFinishedArea || 'N/A';
-    const image = 'https://via.placeholder.com/400x300/000000/FFD700?text=Property+Image';
     const mlsId = listing.listing_key || data.LIST_NO || data.ListingID || data.ListingKey || 'unknown';
     const description = data.REMARKS ? data.REMARKS.substring(0, 150) + '...' : `Beautiful property in ${data.City === '1' ? 'Boston' : data.City || 'Boston'}`;
+    
+    // Use MLSPin photo URL if MLS ID is available, otherwise fallback to placeholder
+    const image = (mlsId && mlsId !== 'unknown') 
+        ? generatePhotoURL(mlsId, 0, 400, 300)
+        : 'https://via.placeholder.com/400x300/000000/FFD700?text=Property+Image';
     
     return `
         <div class="listing-card" data-mls-id="${mlsId}">
