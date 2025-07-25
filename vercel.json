@@ -29,6 +29,7 @@
     }
   ],
   "env": {
-    "NODE_ENV": "production"
+    "NODE_ENV": "production",
+    "PYTHON_API_URL": "https://web-production-35090.up.railway.app"
   }
 }
