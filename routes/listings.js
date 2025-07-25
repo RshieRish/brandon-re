@@ -34,7 +34,15 @@ router.get('/', async (req, res) => {
     };
     
     const listings = await dataService.getListings(filters);
-    const { paginatedData, pagination } = getPaginationInfo(listings, page, limit);
+    
+    // Handle pagination
+    const currentPage = parseInt(page) || 1;
+    const itemsPerPage = parseInt(limit) || 12;
+    const totalItems = listings ? listings.length : 0;
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedData = listings ? listings.slice(startIndex, endIndex) : [];
+    const pagination = getPaginationInfo(currentPage, itemsPerPage, totalItems);
     
     res.json({
       success: true,

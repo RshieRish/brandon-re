@@ -542,6 +542,18 @@ body {
     z-index: 1000;
 }
 
+/* Prevent chatbot from interfering with touch scrolling on mobile */
+@media (max-width: 768px) {
+    .chatbot-widget {
+        pointer-events: auto;
+    }
+    
+    .chatbot-window.active {
+        position: fixed;
+        z-index: 1001;
+    }
+}
+
 .chatbot-toggle {
     width: 60px;
     height: 60px;
@@ -717,6 +729,18 @@ body {
     background: var(--accent-color);
 }
 
+/* Error and Loading States */
+.error-message {
+    text-align: center;
+    padding: 2rem;
+    color: #dc3545;
+}
+
+.loading-container {
+    text-align: center;
+    padding: 2rem;
+}
+
 /* Loading Animation */
 .loading {
     display: inline-block;
@@ -730,6 +754,218 @@ body {
 
 @keyframes spin {
     to { transform: rotate(360deg); }
+}
+
+/* Load More Button */
+.load-more-container {
+    text-align: center;
+    margin: 2rem 0;
+}
+
+.load-more-container .btn {
+    padding: 12px 30px;
+    font-size: 1rem;
+    min-width: 200px;
+}
+
+/* Listing Detail Page Styles */
+.listing-detail-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.listing-header {
+    margin-bottom: 2rem;
+}
+
+.listing-title h1 {
+    font-size: 2.5rem;
+    color: var(--primary-color);
+    margin-bottom: 0.5rem;
+}
+
+.listing-price {
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--accent-color);
+    margin-bottom: 1rem;
+}
+
+.listing-meta {
+    display: flex;
+    gap: 2rem;
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.listing-gallery {
+    margin-bottom: 3rem;
+}
+
+.main-image {
+    margin-bottom: 1rem;
+}
+
+.main-image img {
+    width: 100%;
+    height: 400px;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+.image-thumbnails {
+    display: flex;
+    gap: 1rem;
+    overflow-x: auto;
+    padding: 0.5rem 0;
+}
+
+.thumbnail {
+    width: 120px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 4px;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.3s ease;
+    flex-shrink: 0;
+}
+
+.thumbnail.active,
+.thumbnail:hover {
+    opacity: 1;
+    border: 2px solid var(--accent-color);
+}
+
+.property-highlights {
+    margin-bottom: 2rem;
+}
+
+.highlights-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+.highlight-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.highlight-item i {
+    font-size: 1.5rem;
+    color: var(--accent-color);
+    width: 30px;
+    text-align: center;
+}
+
+.highlight-value {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: var(--primary-color);
+    display: block;
+}
+
+.highlight-label {
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.property-description,
+.property-details {
+    margin-bottom: 2rem;
+}
+
+.property-description h2,
+.property-details h2,
+.property-highlights h2 {
+    color: var(--primary-color);
+    margin-bottom: 1rem;
+    font-size: 1.5rem;
+}
+
+.details-grid {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.detail-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 0.75rem;
+    border-bottom: 1px solid #eee;
+}
+
+.detail-label {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.detail-value {
+    color: #666;
+}
+
+.contact-agent {
+    background: #f8f9fa;
+    padding: 2rem;
+    border-radius: 8px;
+    margin-top: 2rem;
+}
+
+.agent-info {
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+}
+
+.agent-photo img {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.agent-details h3 {
+    color: var(--primary-color);
+    margin-bottom: 0.5rem;
+}
+
+.agent-contact {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.agent-contact .btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Back Button */
+.back-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--primary-color);
+    text-decoration: none;
+    margin-bottom: 2rem;
+    font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.back-button:hover {
+    color: var(--accent-color);
+}
+
+.back-button i {
+    font-size: 1.2rem;
 }
 
 /* Responsive Design */
@@ -766,9 +1002,24 @@ body {
         grid-template-columns: 1fr;
     }
     
+    .chatbot-widget {
+        bottom: 15px;
+        right: 15px;
+    }
+    
+    .chatbot-toggle {
+        width: 50px;
+        height: 50px;
+    }
+    
+    .chatbot-toggle i {
+        font-size: 1.2rem;
+    }
+    
     .chatbot-window {
         width: 300px;
         height: 400px;
+        bottom: 70px;
     }
 }
 
@@ -794,9 +1045,85 @@ body {
         align-items: center;
     }
     
+    .chatbot-widget {
+        bottom: 10px;
+        right: 10px;
+    }
+    
+    .chatbot-toggle {
+        width: 45px;
+        height: 45px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    .chatbot-toggle i {
+        font-size: 1rem;
+    }
+    
     .chatbot-window {
-        width: calc(100vw - 40px);
-        right: 20px;
-        left: 20px;
+        width: calc(100vw - 20px);
+        height: calc(100vh - 120px);
+        right: 10px;
+        left: 10px;
+        bottom: 65px;
+        max-height: 450px;
+    }
+    
+    .chatbot-messages {
+        padding: 0.8rem;
+    }
+    
+    .chatbot-input {
+        padding: 0.8rem;
+    }
+    
+    .chatbot-input input {
+        padding: 0.6rem;
+        font-size: 0.9rem;
+    }
+    
+    /* Listing Detail Mobile Styles */
+    .listing-detail-content {
+        padding: 1rem;
+    }
+    
+    .listing-title h1 {
+        font-size: 1.8rem;
+    }
+    
+    .listing-price {
+        font-size: 1.5rem;
+    }
+    
+    .listing-meta {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .highlights-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .agent-info {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .agent-contact {
+        flex-direction: column;
+    }
+    
+    .detail-row {
+        grid-template-columns: 1fr;
+        gap: 0.25rem;
+    }
+    
+    .main-image img {
+        height: 250px;
+    }
+    
+    .thumbnail {
+        width: 80px;
+        height: 60px;
     }
 }

@@ -47,7 +47,7 @@ BATCH_SIZE      = int(os.getenv("UPSERT_BATCH_SIZE", "100"))
 SCHEDULE_CRON   = os.getenv("CRON_EXPR", "0 2 * * *")  # every day 02:00 local
 
 API_HOST        = os.getenv("API_HOST", "0.0.0.0")
-API_PORT        = int(os.getenv("API_PORT", "8000"))
+API_PORT        = int(os.getenv("PORT", os.getenv("API_PORT", "8000")))
 
 # List of fields you want to promote to columns for faster search
 # Leave empty to keep everything inside a JSONB blob
@@ -187,15 +187,40 @@ def parse_rows(fh: io.StringIO) -> List[Dict[str, Any]]:
     return rows
 
 def upsert_rows(rows: List[Dict[str, Any]]):
+    """Insert/update rows into the listings table with duplicate prevention."""
     if not rows:
+        log.warning("No rows to upsert.")
         return
+
+    # Filter out rows without ListingKey to prevent invalid data
+    valid_rows = [r for r in rows if r.get("ListingKey")]
+    if len(valid_rows) != len(rows):
+        log.warning("Filtered out %s rows without ListingKey", len(rows) - len(valid_rows))
+    
+    if not valid_rows:
+        log.warning("No valid rows to upsert after filtering.")
+        return
+
     cols = ["listing_key"] + [f.lower() for f in FIELD_MAP] + ["data"]
     records = []
-    for r in rows:
-        record = [r.get("ListingKey")]
+    seen_keys = set()
+    
+    for r in valid_rows:
+        listing_key = r.get("ListingKey")
+        # Skip duplicates within the same batch
+        if listing_key in seen_keys:
+            log.debug("Skipping duplicate listing_key in batch: %s", listing_key)
+            continue
+        seen_keys.add(listing_key)
+        
+        record = [listing_key]
         record += [r.get(f, None) for f in FIELD_MAP]
         record.append(Json(r))
         records.append(record)
+
+    if not records:
+        log.warning("No unique records to upsert after deduplication.")
+        return
 
     # Use execute_values with proper template
     query = f"""
@@ -221,7 +246,7 @@ def upsert_rows(rows: List[Dict[str, Any]]):
                 page_size=BATCH_SIZE
             )
             log.info("Completed batch %s/%s", batch_num, total_batches)
-    log.info("Upserted %s rows.", len(records))
+    log.info("Upserted %s unique listings (filtered %s duplicates).", len(records), len(valid_rows) - len(records))
 
 def insert_sample_data():
     """Insert some sample data for testing when FTP is not available"""
@@ -299,8 +324,24 @@ def insert_sample_data():
             cur.execute(query, record)
     log.info("Sample data inserted (%s listings).", len(records))
 
-def etl_job():
+def check_existing_data():
+    """Check if we already have data in the database"""
     try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM listings WHERE listing_key NOT LIKE 'MA%'")
+            real_listings_count = cur.fetchone()[0]
+            return real_listings_count > 0
+    except Exception as e:
+        log.warning("Error checking existing data: %s", e)
+        return False
+
+def etl_job(force_reload=False):
+    try:
+        # Check if we already have data and this isn't a forced reload
+        if not force_reload and check_existing_data():
+            log.info("Data already exists in database, skipping ETL job. Use force_reload=True to override.")
+            return
+        
         # Try to read from local files first (manually downloaded)
         log.info("Starting ETL job with local files")
         fh = fetch_listing_file()
@@ -309,8 +350,7 @@ def etl_job():
         if DOWNLOAD_PHOTOS:
             log.warning("Photo download not yet implemented – set DOWNLOAD_PHOTOS=false or extend here.")
     except Exception as e:
-        log.warning("ETL job failed: %s. Using sample data instead.", e)
-        insert_sample_data()
+        log.warning("ETL job failed: %s. No sample data will be inserted - using existing database data.", e)
 
 # ──────────────────────────────── API ───────────────────────────────── #
 
@@ -334,12 +374,14 @@ class Listing(BaseModel):
     class Config:
         extra = "allow"
 
-@app.get("/listings", response_model=List[Listing])
+@app.get("/listings")
 def list_listings(
     city: Optional[str] = Query(None),
     state: Optional[str] = Query(None, alias="state"),
     min_price: Optional[int] = Query(None, ge=0),
     max_price: Optional[int] = Query(None, ge=0),
+    bedrooms: Optional[int] = Query(None, ge=0),
+    bathrooms: Optional[int] = Query(None, ge=0),
     limit: int = Query(50, gt=0, le=500),
     offset: int = Query(0, ge=0),
 ):
@@ -351,11 +393,17 @@ def list_listings(
         where.append("data->>'StateOrProvince' = %s")
         params.append(state)
     if min_price is not None:
-        where.append("(data->>'ListPrice')::int >= %s")
+        where.append("COALESCE((data->>'ListPrice')::numeric, 0) >= %s")
         params.append(min_price)
     if max_price is not None:
-        where.append("(data->>'ListPrice')::int <= %s")
+        where.append("COALESCE((data->>'ListPrice')::numeric, 0) <= %s")
         params.append(max_price)
+    if bedrooms is not None:
+        where.append("COALESCE((data->>'BedroomsTotal')::numeric, (data->>'NO_BEDROOMS')::numeric, 0) >= %s")
+        params.append(bedrooms)
+    if bathrooms is not None:
+        where.append("COALESCE((data->>'BathroomsTotalInteger')::numeric, (data->>'NO_FULL_BATHS')::numeric, 0) >= %s")
+        params.append(bathrooms)
 
     where_sql = "WHERE " + " AND ".join(where) if where else ""
     sql = f"""
@@ -366,18 +414,44 @@ def list_listings(
         LIMIT %s OFFSET %s
     """
     params.extend([limit, offset])
+    
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(sql, params)
         rows = cur.fetchall()
-    return rows
+    
+    # Format response to match frontend expectations
+    formatted_listings = []
+    for row in rows:
+        formatted_listings.append({
+            "listing_key": row['listing_key'],
+            "data": row['data'],
+            "updated_at": row['updated_at'].isoformat() if row['updated_at'] else None
+        })
+    
+    return {
+        "success": True,
+        "data": formatted_listings,
+        "count": len(formatted_listings),
+        "filters": {
+            "city": city,
+            "state": state,
+            "min_price": min_price,
+            "max_price": max_price,
+            "bedrooms": bedrooms,
+            "bathrooms": bathrooms,
+            "limit": limit,
+            "offset": offset
+        }
+    }
 
 @app.get("/health")
 def health_check():
     """Health check endpoint"""
     try:
         with get_conn() as conn, conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM listings")
-            count = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) as count FROM listings")
+            result = cur.fetchone()
+            count = result['count'] if result else 0
         
         return {
             "status": "OK",
@@ -392,7 +466,7 @@ def health_check():
             "timestamp": datetime.now().isoformat()
         })
 
-@app.get("/listings/{listing_key}", response_model=Listing)
+@app.get("/listings/{listing_key}")
 def get_listing(listing_key: str):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
@@ -402,7 +476,57 @@ def get_listing(listing_key: str):
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Listing not found")
-    return row
+    
+    return {
+        "success": True,
+        "data": {
+            "listing_key": row['listing_key'],
+            "data": row['data'],
+            "updated_at": row['updated_at'].isoformat() if row['updated_at'] else None
+        }
+    }
+
+@app.get("/listings/featured/all")
+def get_featured_listings():
+    """Get featured listings (first 6 listings)"""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT listing_key, data, updated_at FROM listings ORDER BY updated_at DESC LIMIT 6"
+        )
+        rows = cur.fetchall()
+    
+    formatted_listings = []
+    for row in rows:
+        formatted_listings.append({
+            "listing_key": row['listing_key'],
+            "data": row['data'],
+            "updated_at": row['updated_at'].isoformat() if row['updated_at'] else None
+        })
+    
+    return {
+        "success": True,
+        "data": {
+            "data": formatted_listings
+        },
+        "count": len(formatted_listings)
+    }
+
+@app.post("/admin/reload-data")
+def reload_data(force: bool = True):
+    """Manually trigger ETL job with optional force reload"""
+    try:
+        etl_job(force_reload=force)
+        return {
+            "success": True,
+            "message": "ETL job completed successfully",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail={
+            "success": False,
+            "message": f"ETL job failed: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        })
 
 # ───────────────────────────── SCHEDULER ────────────────────────────── #
 
@@ -427,7 +551,12 @@ def start_scheduler():
 
 def main():
     init_db()
-    etl_job()                    # immediate first load
+    # Only run ETL job if no data exists (first time setup)
+    if not check_existing_data():
+        log.info("No existing data found, running initial ETL job")
+        etl_job()
+    else:
+        log.info("Existing data found, skipping initial ETL job")
     start_scheduler()
     uvicorn.run(app, host=API_HOST, port=API_PORT)
 

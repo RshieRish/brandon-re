@@ -3,11 +3,11 @@ const mockDataService = require('./mockDataService');
 
 class PythonApiService {
   constructor() {
-    this.baseURL = process.env.PYTHON_API_URL || 'http://localhost:8000';
+    this.baseURL = process.env.PYTHON_API_URL || 'https://web-production-35090.up.railway.app';
     this.useFallback = process.env.NODE_ENV === 'production' && !process.env.PYTHON_API_URL;
     this.client = axios.create({
       baseURL: this.baseURL,
-      timeout: 10000,
+      timeout: 15000,
       headers: {
         'Content-Type': 'application/json'
       }
@@ -15,6 +15,8 @@ class PythonApiService {
     
     if (this.useFallback) {
       console.log('🔄 Python API not available in production, using mock data fallback');
+    } else {
+      console.log('🐍 Python API configured at:', this.baseURL);
     }
   }
 
@@ -37,6 +39,12 @@ class PythonApiService {
       params.append('limit', '50');
       
       const response = await this.client.get(`/listings?${params.toString()}`);
+      
+      // Handle the Python API response format
+      if (response.data && response.data.data) {
+        return response.data.data;
+      }
+      
       return response.data || [];
     } catch (error) {
       console.error('Error fetching listings from Python API, falling back to mock data:', error.message);
@@ -51,6 +59,12 @@ class PythonApiService {
     
     try {
       const response = await this.client.get(`/listings/${mlsId}`);
+      
+      // Handle the new API response format
+      if (response.data && response.data.success && response.data.data) {
+        return response.data.data;
+      }
+      
       return response.data;
     } catch (error) {
       if (error.response?.status === 404) {
@@ -67,8 +81,14 @@ class PythonApiService {
     }
     
     try {
-      // Get first 6 listings as featured
-      const response = await this.client.get('/listings?limit=6');
+      // Use the dedicated featured endpoint
+      const response = await this.client.get('/listings/featured/all');
+      
+      // Handle the new API response format
+      if (response.data && response.data.success && response.data.data && response.data.data.data) {
+        return response.data.data.data;
+      }
+      
       return response.data || [];
     } catch (error) {
       console.error('Error fetching featured listings from Python API, falling back to mock data:', error.message);
@@ -96,6 +116,12 @@ class PythonApiService {
       params.append('limit', '100'); // Higher limit for search results
       
       const response = await this.client.get(`/listings?${params.toString()}`);
+      
+      // Handle the Python API response format
+      if (response.data && response.data.data) {
+        return response.data.data;
+      }
+      
       return response.data || [];
     } catch (error) {
       console.error('Error performing advanced search on Python API, falling back to mock data:', error.message);
@@ -112,6 +138,12 @@ class PythonApiService {
       // For now, return general listings since our Python API doesn't have geo search
       // This could be enhanced later with geographic filtering
       const response = await this.client.get('/listings?limit=20');
+      
+      // Handle the Python API response format
+      if (response.data && response.data.data) {
+        return response.data.data;
+      }
+      
       return response.data || [];
     } catch (error) {
       console.error('Error fetching nearby listings from Python API, falling back to mock data:', error.message);

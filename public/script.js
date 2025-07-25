@@ -181,8 +181,8 @@ async function loadFeaturedListings() {
         const response = await fetch(`${API_BASE_URL}/listings/featured/all`);
         const data = await response.json();
         
-        if (data.success && data.data) {
-            displayListings(data.data);
+        if (data.success && data.data && data.data.data) {
+            displayListings(data.data.data);
         } else {
             // Fallback to regular listings if featured not available
             await loadRegularListings();
@@ -193,20 +193,53 @@ async function loadFeaturedListings() {
     }
 }
 
+// Pagination state
+let currentPage = 1;
+let isLoadingMore = false;
+let hasMoreListings = true;
+
 // Load regular listings as fallback
-async function loadRegularListings() {
+async function loadRegularListings(page = 1, append = false) {
     try {
-        const response = await fetch(`${API_BASE_URL}/listings?limit=6`);
+        if (!append) {
+            showLoading();
+        } else {
+            isLoadingMore = true;
+            updateLoadMoreButton('Loading...');
+        }
+        
+        const response = await fetch(`${API_BASE_URL}/listings?page=${page}&limit=6`);
         const data = await response.json();
         
-        if (data.success && data.data) {
-            displayListings(data.data);
+        if (data.success && data.data && data.data.data) {
+            if (append) {
+                appendListings(data.data.data);
+            } else {
+                displayListings(data.data.data);
+            }
+            
+            // Update pagination state
+            currentPage = page;
+            hasMoreListings = data.data.data.length === 6; // If we got less than 6, no more listings
+            
+            // Show/hide load more button
+            updateLoadMoreButton();
         } else {
-            showError('Unable to load listings at this time.');
+            if (!append) {
+                showError('Unable to load listings at this time.');
+            }
+            hasMoreListings = false;
+            updateLoadMoreButton();
         }
     } catch (error) {
         console.error('Error loading listings:', error);
-        showError('Unable to connect to the listings service.');
+        if (!append) {
+            showError('Unable to connect to the listings service.');
+        }
+        hasMoreListings = false;
+        updateLoadMoreButton();
+    } finally {
+        isLoadingMore = false;
     }
 }
 
@@ -259,6 +292,37 @@ function displayListings(listings) {
             showListingDetails(mlsId);
         });
     });
+    
+    // Add load more button if not exists
+    addLoadMoreButton();
+}
+
+// Append listings (for pagination)
+function appendListings(listings) {
+    if (!listings || listings.length === 0) {
+        return;
+    }
+    
+    // Remove load more button temporarily
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    if (loadMoreBtn) {
+        loadMoreBtn.remove();
+    }
+    
+    // Append new listings
+    const newListingsHTML = listings.map(listing => createListingCard(listing)).join('');
+    listingsGrid.insertAdjacentHTML('beforeend', newListingsHTML);
+    
+    // Add click events to new listing cards
+    document.querySelectorAll('.listing-card').forEach(card => {
+        card.addEventListener('click', function() {
+            const mlsId = this.dataset.mlsId;
+            showListingDetails(mlsId);
+        });
+    });
+    
+    // Re-add load more button
+    addLoadMoreButton();
 }
 
 // Create listing card HTML
@@ -303,10 +367,9 @@ function createListingCard(listing) {
     `;
 }
 
-// Show listing details (modal or new page)
+// Show listing details - redirect to detail page
 function showListingDetails(mlsId) {
-    // For now, we'll show an alert. In a full implementation, this would open a modal or navigate to a detail page
-    alert(`Opening details for listing ${mlsId}. This would typically show a detailed view with photos, full description, and contact options.`);
+    window.location.href = `listing.html?id=${mlsId}`;
 }
 
 // Handle contact form submission
@@ -634,6 +697,58 @@ function formatPrice(price) {
 function formatNumber(number) {
     if (!number) return 'N/A';
     return new Intl.NumberFormat('en-US').format(number);
+}
+
+// Add load more button
+function addLoadMoreButton() {
+    const listingsSection = document.getElementById('listings');
+    const existingBtn = document.getElementById('loadMoreBtn');
+    
+    if (!existingBtn && hasMoreListings && listingsGrid.children.length > 0) {
+        const loadMoreHTML = `
+            <div class="load-more-container">
+                <button id="loadMoreBtn" class="btn btn-secondary">
+                    Load More Listings
+                </button>
+            </div>
+        `;
+        if (listingsSection) {
+            listingsSection.insertAdjacentHTML('beforeend', loadMoreHTML);
+        } else {
+            listingsGrid.insertAdjacentHTML('afterend', loadMoreHTML);
+        }
+        
+        // Add event listener to the new button
+        const newBtn = document.getElementById('loadMoreBtn');
+        if (newBtn) {
+            newBtn.addEventListener('click', loadMoreListings);
+        }
+    }
+}
+
+// Update load more button state
+function updateLoadMoreButton(text = null) {
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    
+    if (!loadMoreBtn) return;
+    
+    if (text) {
+        loadMoreBtn.textContent = text;
+        loadMoreBtn.disabled = true;
+    } else if (!hasMoreListings) {
+        loadMoreBtn.style.display = 'none';
+    } else {
+        loadMoreBtn.textContent = 'Load More Listings';
+        loadMoreBtn.disabled = false;
+        loadMoreBtn.style.display = 'block';
+    }
+}
+
+// Load more listings
+function loadMoreListings() {
+    if (isLoadingMore || !hasMoreListings) return;
+    
+    loadRegularListings(currentPage + 1, true);
 }
 
 function showLoading() {
