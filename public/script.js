@@ -309,17 +309,22 @@ function appendListings(listings) {
         loadMoreBtn.remove();
     }
     
+    // Get current number of cards to identify new ones
+    const currentCardCount = listingsGrid.children.length;
+    
     // Append new listings
     const newListingsHTML = listings.map(listing => createListingCard(listing)).join('');
     listingsGrid.insertAdjacentHTML('beforeend', newListingsHTML);
     
-    // Add click events to new listing cards
-    document.querySelectorAll('.listing-card').forEach(card => {
+    // Add click events only to newly added listing cards
+    const allCards = document.querySelectorAll('.listing-card');
+    for (let i = currentCardCount; i < allCards.length; i++) {
+        const card = allCards[i];
         card.addEventListener('click', function() {
             const mlsId = this.dataset.mlsId;
             showListingDetails(mlsId);
         });
-    });
+    }
     
     // Re-add load more button
     addLoadMoreButton();
