@@ -90,15 +90,12 @@ function displayListingDetail(listing) {
             
             <div class="listing-gallery">
                 <div class="main-image">
-                    <img src="https://via.placeholder.com/800x600/000000/FFD700?text=Property+Image" 
+                    <img src="${generatePhotoURL(mlsId, 0, 800, 600)}" 
                          alt="${address}" 
                          onerror="this.src='https://via.placeholder.com/800x600/000000/FFD700?text=Property+Image'">
                 </div>
-                <div class="image-thumbnails">
-                    <img src="https://via.placeholder.com/200x150/000000/FFD700?text=Photo+1" alt="Photo 1" class="thumbnail active">
-                    <img src="https://via.placeholder.com/200x150/000000/FFD700?text=Photo+2" alt="Photo 2" class="thumbnail">
-                    <img src="https://via.placeholder.com/200x150/000000/FFD700?text=Photo+3" alt="Photo 3" class="thumbnail">
-                    <img src="https://via.placeholder.com/200x150/000000/FFD700?text=Photo+4" alt="Photo 4" class="thumbnail">
+                <div class="image-thumbnails" id="photo-thumbnails">
+                    <!-- Thumbnails will be dynamically loaded -->
                 </div>
             </div>
             
@@ -204,18 +201,72 @@ function displayListingDetail(listing) {
     
     listingDetail.innerHTML = detailHTML;
     
-    // Initialize image gallery
-    initializeImageGallery();
+    // Initialize image gallery with real photos
+    initializeImageGallery(mlsId);
     
     // Update page title
     document.title = `${address} - SWS & Co.`;
 }
 
-// Initialize image gallery
-function initializeImageGallery() {
+// Generate MLSPin photo URL
+function generatePhotoURL(mlsId, photoNumber, width, height) {
+    return `https://media.mlspin.com/photo.aspx?mls=${mlsId}&n=${photoNumber}&w=${width}&h=${height}`;
+}
+
+// Check if photo exists by attempting to load it
+function checkPhotoExists(url) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(true);
+        img.onerror = () => resolve(false);
+        img.src = url;
+    });
+}
+
+// Initialize image gallery with real photos
+async function initializeImageGallery(mlsId) {
     const mainImage = document.querySelector('.main-image img');
-    const thumbnails = document.querySelectorAll('.thumbnail');
+    const thumbnailsContainer = document.getElementById('photo-thumbnails');
     
+    if (!mlsId || mlsId === 'unknown') {
+        // Fallback to placeholder if no MLS ID
+        thumbnailsContainer.innerHTML = '<p class="no-photos">Photos not available</p>';
+        return;
+    }
+    
+    const availablePhotos = [];
+    
+    // Check for up to 10 photos (can be increased to 42 if needed)
+    for (let i = 0; i < 10; i++) {
+        const thumbnailURL = generatePhotoURL(mlsId, i, 200, 150);
+        const photoExists = await checkPhotoExists(thumbnailURL);
+        
+        if (photoExists) {
+            availablePhotos.push({
+                photoNumber: i,
+                thumbnailURL: thumbnailURL,
+                fullURL: generatePhotoURL(mlsId, i, 800, 600)
+            });
+        }
+    }
+    
+    if (availablePhotos.length === 0) {
+        thumbnailsContainer.innerHTML = '<p class="no-photos">Photos not available for this property</p>';
+        return;
+    }
+    
+    // Generate thumbnail HTML
+    const thumbnailsHTML = availablePhotos.map((photo, index) => {
+        return `<img src="${photo.thumbnailURL}" 
+                     alt="Photo ${photo.photoNumber + 1}" 
+                     class="thumbnail ${index === 0 ? 'active' : ''}" 
+                     data-full-url="${photo.fullURL}">`;
+    }).join('');
+    
+    thumbnailsContainer.innerHTML = thumbnailsHTML;
+    
+    // Add click event listeners to thumbnails
+    const thumbnails = thumbnailsContainer.querySelectorAll('.thumbnail');
     thumbnails.forEach(thumbnail => {
         thumbnail.addEventListener('click', function() {
             // Remove active class from all thumbnails
@@ -225,7 +276,7 @@ function initializeImageGallery() {
             this.classList.add('active');
             
             // Update main image
-            mainImage.src = this.src.replace('200x150', '800x600');
+            mainImage.src = this.dataset.fullUrl;
         });
     });
 }
