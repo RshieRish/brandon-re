@@ -294,6 +294,8 @@ body {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
     gap: 2rem;
+    padding: 0;
+    margin: 0;
 }
 
 .listing-card {
@@ -1154,6 +1156,22 @@ body {
 }
 
 /* Responsive Design */
+/* Tablet and smaller desktop styles */
+@media (max-width: 1200px) {
+    .listings-grid {
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 1.5rem;
+    }
+}
+
+/* Large phone and small tablet styles */
+@media (max-width: 900px) {
+    .listings-grid {
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.25rem;
+    }
+}
+
 @media (max-width: 768px) {
     .nav-menu {
         display: none;
@@ -1184,7 +1202,13 @@ body {
     }
     
     .listings-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.5rem;
+    }
+    
+    .listing-card {
+        margin: 0 auto;
+        max-width: 400px;
     }
     
     .chatbot-widget {
@@ -1237,6 +1261,34 @@ body {
     .hero-buttons {
         flex-direction: column;
         align-items: center;
+    }
+    
+    .listings-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        padding: 0 5px;
+    }
+    
+    .listing-card {
+        max-width: 100%;
+        margin: 0;
+    }
+    
+    .listing-content {
+        padding: 1rem;
+    }
+    
+    .listing-price {
+        font-size: 1.3rem;
+    }
+    
+    .listing-address {
+        font-size: 1rem;
+    }
+    
+    .listing-details {
+        flex-wrap: wrap;
+        gap: 0.5rem;
     }
     
     .chatbot-widget {
