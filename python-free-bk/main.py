@@ -40,8 +40,8 @@ SAMPLE_LISTINGS = [
         "REMARKS": "Stunning Back Bay Victorian with modern amenities",
         "LATITUDE": "42.3505",
         "LONGITUDE": "-71.0743",
-        "LIST_AGENT_NAME": "Brandon Smith",
-        "LIST_AGENT_ID": "BRANDON001",
+        "LIST_AGENT_NAME": "Brandon Sweeney",
+        "LIST_AGENT_ID": "Cn222505",
         "IS_BRANDON_LISTING": True
     },
     {
@@ -78,8 +78,8 @@ SAMPLE_LISTINGS = [
         "REMARKS": "Charming family home in quiet neighborhood",
         "LATITUDE": "42.6701",
         "LONGITUDE": "-71.3023",
-        "LIST_AGENT_NAME": "Brandon Smith",
-        "LIST_AGENT_ID": "BRANDON001",
+        "LIST_AGENT_NAME": "Brandon Sweeney",
+        "LIST_AGENT_ID": "Cn222505",
         "IS_BRANDON_LISTING": True
     },
     {
@@ -208,10 +208,10 @@ def get_listings(
 
 @app.get("/listings/featured")
 def get_featured_listings():
-    """Get featured listings with Brandon's listings prioritized first"""
-    # Separate Brandon's listings and other listings
-    brandon_listings = [listing for listing in SAMPLE_LISTINGS if listing.get("IS_BRANDON_LISTING", False)]
-    other_listings = [listing for listing in SAMPLE_LISTINGS if not listing.get("IS_BRANDON_LISTING", False)]
+    """Get featured listings with Brandon Sweeney's listings prioritized first"""
+    # Separate Brandon's listings (using agent ID Cn222505) and other listings
+    brandon_listings = [listing for listing in SAMPLE_LISTINGS if listing.get("LIST_AGENT_ID") == "Cn222505"]
+    other_listings = [listing for listing in SAMPLE_LISTINGS if listing.get("LIST_AGENT_ID") != "Cn222505"]
     
     # Combine with Brandon's listings first, then others
     featured = brandon_listings + other_listings
