@@ -23,7 +23,62 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeEventListeners();
     initializeChatbot();
     initializeSmoothScrolling();
+    initializeMobileMenu();
 });
+
+// Initialize mobile menu functionality
+function initializeMobileMenu() {
+    const mobileMenuToggle = document.querySelector('.mobile-menu-toggle');
+    const navMenu = document.querySelector('.nav-menu');
+    const navLinks = document.querySelectorAll('.nav-link');
+    
+    if (mobileMenuToggle && navMenu) {
+        // Toggle mobile menu
+        mobileMenuToggle.addEventListener('click', function() {
+            navMenu.classList.toggle('mobile-open');
+            
+            // Toggle hamburger icon
+            const icon = mobileMenuToggle.querySelector('i');
+            if (navMenu.classList.contains('mobile-open')) {
+                icon.classList.remove('fa-bars');
+                icon.classList.add('fa-times');
+            } else {
+                icon.classList.remove('fa-times');
+                icon.classList.add('fa-bars');
+            }
+        });
+        
+        // Close mobile menu when clicking on nav links
+        navLinks.forEach(link => {
+            link.addEventListener('click', function() {
+                navMenu.classList.remove('mobile-open');
+                const icon = mobileMenuToggle.querySelector('i');
+                icon.classList.remove('fa-times');
+                icon.classList.add('fa-bars');
+            });
+        });
+        
+        // Close mobile menu when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!mobileMenuToggle.contains(event.target) && !navMenu.contains(event.target)) {
+                navMenu.classList.remove('mobile-open');
+                const icon = mobileMenuToggle.querySelector('i');
+                icon.classList.remove('fa-times');
+                icon.classList.add('fa-bars');
+            }
+        });
+        
+        // Close mobile menu on window resize if screen becomes larger
+        window.addEventListener('resize', function() {
+            if (window.innerWidth > 768) {
+                navMenu.classList.remove('mobile-open');
+                const icon = mobileMenuToggle.querySelector('i');
+                icon.classList.remove('fa-times');
+                icon.classList.add('fa-bars');
+            }
+        });
+    }
+}
 
 // Initialize hero video for cross-browser compatibility
 function initializeHeroVideo() {
@@ -176,19 +231,28 @@ function initializeSmoothScrolling() {
 
 // Load featured listings
 async function loadFeaturedListings() {
+    console.log('🏠 Loading featured listings...');
     try {
         showLoading();
         const response = await fetch(`${API_BASE_URL}/listings/featured/all`);
         const data = await response.json();
         
-        if (data.success && data.data && data.data.data) {
+        console.log('📊 Featured listings response:', data);
+        
+        if (data.success && data.data && data.data.data && data.data.data.length > 0) {
+            console.log('✅ Using featured listings:', data.data.data.length);
             displayListings(data.data.data);
         } else {
+            console.log('⚠️ No featured listings, falling back to regular listings');
             // Fallback to regular listings if featured not available
             await loadRegularListings();
         }
     } catch (error) {
-        console.error('Error loading featured listings:', error);
+        console.error('❌ Error loading featured listings:', error);
+        // Clear any partial content before loading regular listings
+        if (listingsGrid) {
+            listingsGrid.innerHTML = '';
+        }
         await loadRegularListings();
     }
 }
@@ -200,6 +264,7 @@ let hasMoreListings = true;
 
 // Load regular listings as fallback
 async function loadRegularListings(page = 1, append = false) {
+    console.log('🔄 loadRegularListings called - page:', page, 'append:', append);
     try {
         if (!append) {
             showLoading();
@@ -211,10 +276,14 @@ async function loadRegularListings(page = 1, append = false) {
         const response = await fetch(`${API_BASE_URL}/listings?page=${page}&limit=6`);
         const data = await response.json();
         
+        console.log('📡 Regular listings API response:', data.success, 'data length:', data.data?.data?.length);
+        
         if (data.success && data.data && data.data.data) {
             if (append) {
+                console.log('➕ Appending listings');
                 appendListings(data.data.data);
             } else {
+                console.log('🔄 Displaying listings');
                 displayListings(data.data.data);
             }
             
@@ -232,7 +301,7 @@ async function loadRegularListings(page = 1, append = false) {
             updateLoadMoreButton();
         }
     } catch (error) {
-        console.error('Error loading listings:', error);
+        console.error('❌ Error loading listings:', error);
         if (!append) {
             showError('Unable to connect to the listings service.');
         }
@@ -278,6 +347,11 @@ async function handleSearch() {
 
 // Display listings in the grid
 function displayListings(listings) {
+    console.log('🎯 displayListings called with:', listings?.length, 'listings');
+    if (listings && listings.length > 0) {
+        console.log('📋 First 3 listings:', listings.slice(0, 3).map(l => ({ id: l.id, mlsNumber: l.mlsNumber, address: l.address })));
+    }
+    
     if (!listings || listings.length === 0) {
         listingsGrid.innerHTML = '<p class="no-results">No listings found.</p>';
         return;
@@ -337,25 +411,50 @@ function generatePhotoURL(mlsId, photoNumber, width, height) {
 
 // Create listing card HTML
 function createListingCard(listing) {
-    // Access data from the nested structure
-    const data = listing.data || listing;
+    // Handle both API data structure and mock data structure
+    const price = formatPrice(
+        listing.price?.amount || listing.price || 0
+    );
     
-    const price = formatPrice(data.LIST_PRICE || data.ListPrice || data.listPrice || 0);
-    const address = `${data.STREET_NO || ''} ${data.STREET_NAME || data.StreetName || ''}, ${data.City === '1' ? 'Boston' : data.City || ''}, ${data.STATE || data.StateOrProvince || 'MA'} ${data.ZIP_CODE || data.PostalCode || ''}`;
-    const bedrooms = data.NO_BEDROOMS || data.BedroomsTotal || 'N/A';
-    const bathrooms = data.NO_FULL_BATHS || data.BathroomsTotalInteger || 'N/A';
-    const sqft = data.SQUARE_FEET || data.LivingArea || data.AboveGradeFinishedArea || 'N/A';
-    const mlsId = listing.listing_key || data.LIST_NO || data.ListingID || data.ListingKey || 'unknown';
-    const description = data.REMARKS ? data.REMARKS.substring(0, 150) + '...' : `Beautiful property in ${data.City === '1' ? 'Boston' : data.City || 'Boston'}`;
+    // Handle address - could be string or object
+    let address = 'Address not available';
+    if (typeof listing.address === 'string') {
+        address = listing.address;
+    } else if (listing.address && typeof listing.address === 'object') {
+        const addr = listing.address;
+        address = `${addr.street || ''}, ${addr.city || ''}, ${addr.state || 'MA'} ${addr.zipCode || ''}`.replace(/,\s*,/g, ',').trim();
+    }
     
-    // Use MLSPin photo URL if MLS ID is available, otherwise fallback to placeholder
-    const image = (mlsId && mlsId !== 'unknown') 
-        ? generatePhotoURL(mlsId, 0, 400, 300)
-        : 'https://via.placeholder.com/400x300/000000/FFD700?text=Property+Image';
+    const bedrooms = listing.bedrooms || listing.property?.bedrooms || 'N/A';
+    const bathrooms = listing.bathrooms || listing.property?.bathrooms || 'N/A';
+    const halfBathrooms = listing.halfBathrooms || listing.property?.halfBaths || 0;
+    const sqft = listing.sqft || listing.squareFootage || listing.property?.squareFeet || 'N/A';
+    const stories = listing.stories || listing.property?.stories || null;
+    const mlsId = listing.id || listing.mlsNumber || 'unknown';
+    const description = listing.description || listing.detailedRemarks || `Beautiful property in Boston`;
+    
+    // Extract property features
+    const features = listing.features || {};
+    const garage = features.garage || listing.garage || null;
+    const pool = features.pool || listing.pool || false;
+    const waterfront = features.waterfront || listing.waterfront || false;
+    const fireplace = features.fireplace || listing.fireplace || listing.fireplaces || null;
+    
+    // Handle images - could be array or object structure
+    let image = 'https://via.placeholder.com/400x300/000000/FFD700?text=Property+Image';
+    if (listing.images && Array.isArray(listing.images) && listing.images.length > 0) {
+        image = listing.images[0];
+    } else if (listing.images?.featured) {
+        image = listing.images.featured;
+    } else if (listing.featuredImage) {
+        image = listing.featuredImage;
+    }
     
     return `
         <div class="listing-card" data-mls-id="${mlsId}">
-            <img src="${image}" alt="${address}" class="listing-image" onerror="this.src='https://via.placeholder.com/400x300/000000/FFD700?text=Property+Image'">
+            <div class="listing-image-container">
+                <img src="${image}" alt="${address}" class="listing-image" onerror="this.src='https://via.placeholder.com/400x300/000000/FFD700?text=Property+Image'">
+            </div>
             <div class="listing-content">
                 <div class="listing-price">${price}</div>
                 <div class="listing-address">${address}</div>
@@ -366,12 +465,34 @@ function createListingCard(listing) {
                     </div>
                     <div class="listing-detail">
                         <i class="fas fa-bath"></i>
-                        <span>${bathrooms} bath</span>
+                        <span>${bathrooms}${halfBathrooms > 0 ? `.${halfBathrooms}` : ''} bath</span>
                     </div>
                     <div class="listing-detail">
                         <i class="fas fa-ruler-combined"></i>
                         <span>${formatNumber(sqft)} sqft</span>
                     </div>
+                    ${stories ? `<div class="listing-detail">
+                        <i class="fas fa-building"></i>
+                        <span>${stories} ${stories === 1 ? 'story' : 'stories'}</span>
+                    </div>` : ''}
+                </div>
+                <div class="listing-features">
+                    ${garage ? `<div class="feature-tag">
+                        <i class="fas fa-car"></i>
+                        <span>${garage} car garage</span>
+                    </div>` : ''}
+                    ${pool ? `<div class="feature-tag">
+                        <i class="fas fa-swimming-pool"></i>
+                        <span>Pool</span>
+                    </div>` : ''}
+                    ${waterfront ? `<div class="feature-tag">
+                        <i class="fas fa-water"></i>
+                        <span>Waterfront</span>
+                    </div>` : ''}
+                    ${fireplace ? `<div class="feature-tag">
+                        <i class="fas fa-fire"></i>
+                        <span>${fireplace > 1 ? `${fireplace} fireplaces` : 'Fireplace'}</span>
+                    </div>` : ''}
                 </div>
                 <div class="listing-description">
                     ${description}
@@ -758,11 +879,71 @@ function updateLoadMoreButton(text = null) {
     }
 }
 
-// Load more listings
+// Load more listings with click tracking
+let loadMoreClickCount = 0;
+
 function loadMoreListings() {
     if (isLoadingMore || !hasMoreListings) return;
     
+    loadMoreClickCount++;
+    
+    // After 3rd click, show option to go to listings page
+    if (loadMoreClickCount >= 3) {
+        showListingsPageOption();
+        return;
+    }
+    
     loadRegularListings(currentPage + 1, true);
+}
+
+// Show option to go to listings page
+function showListingsPageOption() {
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    if (loadMoreBtn) {
+        const container = loadMoreBtn.parentElement;
+        container.innerHTML = `
+            <div class="listings-page-option">
+                <p style="margin-bottom: 1rem; color: #6c757d; text-align: center;">You've seen many properties! Want to explore all available listings with advanced filters?</p>
+                <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                    <button class="btn btn-primary" onclick="window.location.href='listings.html'">
+                        <i class="fas fa-search"></i> View All Listings
+                    </button>
+                    <button class="btn btn-secondary" onclick="continueLoadingMore()">
+                        <i class="fas fa-plus"></i> Load More Here
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        // Track this event
+        trackEvent('load_more_limit_reached', {
+            clickCount: loadMoreClickCount,
+            currentPage: currentPage
+        });
+    }
+}
+
+// Continue loading more on current page
+function continueLoadingMore() {
+    const container = document.querySelector('.listings-page-option').parentElement;
+    container.innerHTML = `
+        <button id="loadMoreBtn" class="btn btn-secondary">
+            Load More Listings
+        </button>
+    `;
+    
+    const newBtn = document.getElementById('loadMoreBtn');
+    if (newBtn) {
+        newBtn.addEventListener('click', loadMoreListings);
+    }
+    
+    // Load more listings
+    loadRegularListings(currentPage + 1, true);
+    
+    // Track this event
+    trackEvent('continued_loading_on_home', {
+        clickCount: loadMoreClickCount
+    });
 }
 
 function showLoading() {

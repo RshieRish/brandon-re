@@ -10,10 +10,64 @@ const listingDetail = document.getElementById('listingDetail');
 const propertyInquiryForm = document.getElementById('propertyInquiryForm');
 const propertyMlsIdInput = document.getElementById('propertyMlsId');
 
+// Initialize mobile menu functionality
+function initializeMobileMenu() {
+    const mobileMenuToggle = document.querySelector('.mobile-menu-toggle');
+    const navMenu = document.querySelector('.nav-menu');
+    const navLinks = document.querySelectorAll('.nav-link');
+    
+    if (mobileMenuToggle && navMenu) {
+        // Toggle mobile menu
+        mobileMenuToggle.addEventListener('click', function() {
+            navMenu.classList.toggle('mobile-open');
+            
+            // Toggle hamburger icon
+            const icon = mobileMenuToggle.querySelector('i');
+            if (navMenu.classList.contains('mobile-open')) {
+                icon.classList.remove('fa-bars');
+                icon.classList.add('fa-times');
+            } else {
+                icon.classList.remove('fa-times');
+                icon.classList.add('fa-bars');
+            }
+        });
+        
+        // Close mobile menu when clicking on nav links
+        navLinks.forEach(link => {
+            link.addEventListener('click', function() {
+                navMenu.classList.remove('mobile-open');
+                const icon = mobileMenuToggle.querySelector('i');
+                icon.classList.remove('fa-times');
+                icon.classList.add('fa-bars');
+            });
+        });
+        
+        // Close mobile menu when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!mobileMenuToggle.contains(event.target) && !navMenu.contains(event.target)) {
+                navMenu.classList.remove('mobile-open');
+                const icon = mobileMenuToggle.querySelector('i');
+                icon.classList.remove('fa-times');
+                icon.classList.add('fa-bars');
+            }
+        });
+        
+        // Close mobile menu on window resize if screen becomes larger
+        window.addEventListener('resize', function() {
+            if (window.innerWidth > 768) {
+                navMenu.classList.remove('mobile-open');
+                const icon = mobileMenuToggle.querySelector('i');
+                icon.classList.remove('fa-times');
+                icon.classList.add('fa-bars');
+            }
+        });
+    }
+}
+
 // Initialize the page
 document.addEventListener('DOMContentLoaded', function() {
     const urlParams = new URLSearchParams(window.location.search);
-    const mlsId = urlParams.get('id');
+    const mlsId = urlParams.get('mlsId') || urlParams.get('id');
     
     if (mlsId) {
         loadListingDetail(mlsId);
@@ -26,6 +80,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (propertyInquiryForm) {
         propertyInquiryForm.addEventListener('submit', handlePropertyInquiry);
     }
+    
+    // Initialize mobile menu
+    initializeMobileMenu();
 });
 
 // Load listing details
@@ -55,13 +112,32 @@ function displayListingDetail(listing) {
     const address = `${data.STREET_NO || ''} ${data.STREET_NAME || data.StreetName || ''}, ${data.City === '1' ? 'Boston' : data.City || ''}, ${data.STATE || data.StateOrProvince || 'MA'} ${data.ZIP_CODE || data.PostalCode || ''}`;
     const bedrooms = data.NO_BEDROOMS || data.BedroomsTotal || 'N/A';
     const bathrooms = data.NO_FULL_BATHS || data.BathroomsTotalInteger || 'N/A';
+    const halfBathrooms = data.NO_HALF_BATHS || data.BathroomsHalf || 0;
     const sqft = data.SQUARE_FEET || data.LivingArea || data.AboveGradeFinishedArea || 'N/A';
     const lotSize = data.LOT_SIZE || data.LotSizeSquareFeet || 'N/A';
     const yearBuilt = data.YEAR_BUILT || data.YearBuilt || 'N/A';
+    const stories = data.STORIES || data.Stories || null;
     const propertyType = data.PROPERTY_TYPE || data.PropertyType || 'Residential';
     const mlsId = listing.listing_key || data.LIST_NO || data.ListingID || data.ListingKey || 'unknown';
-    const description = data.REMARKS || data.PublicRemarks || 'Beautiful property with great potential.';
+    const description = data.REMARKS || data.PublicRemarks || data.detailedRemarks || 'Beautiful property with great potential.';
     const listingDate = data.LIST_DATE || data.ListingContractDate || new Date().toISOString();
+    
+    // Extract property features
+    const features = data.features || {};
+    const garage = features.garage || data.garage || data.GARAGE_SPACES || data.GarageSpaces || null;
+    const pool = features.pool || data.pool || data.POOL || data.PoolPrivateYN || false;
+    const waterfront = features.waterfront || data.waterfront || data.WATERFRONT || data.WaterfrontYN || false;
+    const fireplace = features.fireplace || data.fireplace || data.fireplaces || data.FIREPLACE || data.FireplacesTotal || null;
+    
+    // Additional property features
+    const basement = data.BASEMENT || data.Basement || data.BasementYN || false;
+    const centralAir = data.CENTRAL_AIR || data.CentralAir || data.CoolingYN || data.Cooling || false;
+    const deck = data.DECK || data.Deck || data.PATIO || data.Patio || false;
+    const hardwoodFloors = data.HARDWOOD_FLOORS || data.HardwoodFloors || data.FlooringTypes || false;
+    const laundry = data.LAUNDRY || data.Laundry || data.LaundryFeatures || false;
+    const fencing = data.FENCING || data.Fencing || data.FencedYardYN || false;
+    const newConstruction = data.NEW_CONSTRUCTION || data.NewConstruction || data.NewConstructionYN || false;
+    const energyEfficient = data.ENERGY_EFFICIENT || data.EnergyEfficient || data.GreenEnergyEfficient || false;
     
     // Format listing date
     const formattedDate = new Date(listingDate).toLocaleDateString('en-US', {
@@ -113,7 +189,7 @@ function displayListingDetail(listing) {
                         <div class="highlight-item">
                             <i class="fas fa-bath"></i>
                             <div>
-                                <span class="highlight-value">${bathrooms}</span>
+                                <span class="highlight-value">${bathrooms}${halfBathrooms > 0 ? `.${halfBathrooms}` : ''}</span>
                                 <span class="highlight-label">Bathrooms</span>
                             </div>
                         </div>
@@ -145,6 +221,70 @@ function displayListingDetail(listing) {
                                 <span class="highlight-label">Price/Sq Ft</span>
                             </div>
                         </div>
+                        ${stories ? `<div class="highlight-item">
+                            <i class="fas fa-building"></i>
+                            <div>
+                                <span class="highlight-value">${stories}</span>
+                                <span class="highlight-label">${stories === 1 ? 'Story' : 'Stories'}</span>
+                            </div>
+                        </div>` : ''}
+                        ${garage ? `<div class="highlight-item">
+                            <i class="fas fa-car"></i>
+                            <div>
+                                <span class="highlight-value">${garage}</span>
+                                <span class="highlight-label">Car Garage</span>
+                            </div>
+                        </div>` : ''}
+                    </div>
+                </div>
+                
+                <div class="property-features">
+                    <h2>Property Features</h2>
+                    <div class="features-grid">
+                        ${pool ? `<div class="feature-item">
+                            <i class="fas fa-swimming-pool"></i>
+                            <span>Swimming Pool</span>
+                        </div>` : ''}
+                        ${waterfront ? `<div class="feature-item">
+                            <i class="fas fa-water"></i>
+                            <span>Waterfront Property</span>
+                        </div>` : ''}
+                        ${fireplace ? `<div class="feature-item">
+                            <i class="fas fa-fire"></i>
+                            <span>${fireplace > 1 ? `${fireplace} Fireplaces` : 'Fireplace'}</span>
+                        </div>` : ''}
+                        ${basement ? `<div class="feature-item">
+                            <i class="fas fa-home"></i>
+                            <span>Basement</span>
+                        </div>` : ''}
+                        ${centralAir ? `<div class="feature-item">
+                            <i class="fas fa-snowflake"></i>
+                            <span>Central Air</span>
+                        </div>` : ''}
+                        ${deck ? `<div class="feature-item">
+                            <i class="fas fa-tree"></i>
+                            <span>Deck/Patio</span>
+                        </div>` : ''}
+                        ${hardwoodFloors ? `<div class="feature-item">
+                            <i class="fas fa-th-large"></i>
+                            <span>Hardwood Floors</span>
+                        </div>` : ''}
+                        ${laundry ? `<div class="feature-item">
+                            <i class="fas fa-tshirt"></i>
+                            <span>Laundry</span>
+                        </div>` : ''}
+                        ${fencing ? `<div class="feature-item">
+                            <i class="fas fa-shield-alt"></i>
+                            <span>Fenced Yard</span>
+                        </div>` : ''}
+                        ${newConstruction ? `<div class="feature-item">
+                            <i class="fas fa-hammer"></i>
+                            <span>New Construction</span>
+                        </div>` : ''}
+                        ${energyEfficient ? `<div class="feature-item">
+                            <i class="fas fa-leaf"></i>
+                            <span>Energy Efficient</span>
+                        </div>` : ''}
                     </div>
                 </div>
                 
@@ -170,8 +310,32 @@ function displayListingDetail(listing) {
                         </div>
                         <div class="detail-row">
                             <span class="detail-label">Status:</span>
-                            <span class="detail-value">Active</span>
+                            <span class="detail-value">${data.STATUS || data.ListingStatus || 'Active'}</span>
                         </div>
+                        ${lotSize && lotSize !== 'N/A' ? `<div class="detail-row">
+                            <span class="detail-label">Lot Size:</span>
+                            <span class="detail-value">${formatNumber(lotSize)} sq ft</span>
+                        </div>` : ''}
+                        ${data.DAYS_ON_MARKET || data.DaysOnMarket ? `<div class="detail-row">
+                            <span class="detail-label">Days on Market:</span>
+                            <span class="detail-value">${data.DAYS_ON_MARKET || data.DaysOnMarket}</span>
+                        </div>` : ''}
+                        ${data.SUBDIVISION || data.Subdivision ? `<div class="detail-row">
+                            <span class="detail-label">Subdivision:</span>
+                            <span class="detail-value">${data.SUBDIVISION || data.Subdivision}</span>
+                        </div>` : ''}
+                        ${data.SCHOOL_DISTRICT || data.SchoolDistrict ? `<div class="detail-row">
+                            <span class="detail-label">School District:</span>
+                            <span class="detail-value">${data.SCHOOL_DISTRICT || data.SchoolDistrict}</span>
+                        </div>` : ''}
+                        ${data.TAX_AMOUNT || data.TaxAnnualAmount ? `<div class="detail-row">
+                            <span class="detail-label">Annual Taxes:</span>
+                            <span class="detail-value">$${formatNumber(data.TAX_AMOUNT || data.TaxAnnualAmount)}</span>
+                        </div>` : ''}
+                        ${data.HOA_FEE || data.AssociationFee ? `<div class="detail-row">
+                            <span class="detail-label">HOA Fee:</span>
+                            <span class="detail-value">$${formatNumber(data.HOA_FEE || data.AssociationFee)}/month</span>
+                        </div>` : ''}
                     </div>
                 </div>
                 
@@ -179,7 +343,7 @@ function displayListingDetail(listing) {
                     <h2>Contact Your Dracut Realtor</h2>
                     <div class="agent-info">
                         <div class="agent-photo">
-                            <img src="https://via.placeholder.com/150x150/000000/FFD700?text=Brandon+S" alt="Brandon Sweeney">
+                            <img src="headshot_brandon.png" alt="Brandon Sweeney">
                         </div>
                         <div class="agent-details">
                             <h3>Brandon Sweeney</h3>

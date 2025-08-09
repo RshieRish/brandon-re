@@ -22,7 +22,7 @@ pythonApiService.healthCheck().then(health => {
 // Get all listings with filters
 router.get('/', async (req, res) => {
   try {
-    const { city, minPrice, maxPrice, propertyType, bedrooms, bathrooms, page = 1, limit = 12 } = req.query;
+    const { city, minPrice, maxPrice, propertyType, bedrooms, bathrooms, page = 1, limit } = req.query;
     
     const filters = {
       city,
@@ -35,9 +35,26 @@ router.get('/', async (req, res) => {
     
     const listings = await dataService.getListings(filters);
     
-    // Handle pagination
+    // Return all listings without pagination by default
+    if (!limit) {
+      res.json({
+        success: true,
+        data: {
+          data: listings || [],
+          pagination: {
+            currentPage: 1,
+            totalPages: 1,
+            totalItems: listings ? listings.length : 0,
+            itemsPerPage: listings ? listings.length : 0
+          }
+        }
+      });
+      return;
+    }
+    
+    // Handle pagination only when limit is specified
     const currentPage = parseInt(page) || 1;
-    const itemsPerPage = parseInt(limit) || 12;
+    const itemsPerPage = parseInt(limit);
     const totalItems = listings ? listings.length : 0;
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;

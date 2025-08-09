@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-idx_server.py – FREE IDX ETL + API for MLS PIN “Manual Download”
+idx_server.py – FREE IDX ETL + API for MLS PIN "Manual Download"
 
 • Fetches nightly pipe-delimited listing file + photos via FTP (if enabled)
 • Loads/merges data into Postgres (JSONB for future-proof schema)
 • Launches FastAPI w/ lightweight search endpoints
+• Updated: Increased listing limit to 25000 to return all available listings
 
 Author : Your Name Here
 License: MIT
@@ -28,6 +29,15 @@ from pydantic import BaseModel, Field
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
 import uvicorn
+
+# Import our new automation modules
+from scheduler import (
+    lifespan_scheduler, 
+    get_scheduler_status, 
+    trigger_manual_run,
+    start_scheduler,
+    stop_scheduler
+)
 
 # ─────────────────────────────── CONFIG ──────────────────────────────── #
 
@@ -355,14 +365,16 @@ def etl_job(force_reload=False):
 # ──────────────────────────────── API ───────────────────────────────── #
 
 app = FastAPI(
-    title="Free IDX API (MLS PIN)",
-    version="0.1.0",
-    description="Minimal RESO-like API fed by free MLS PIN manual download.",
+    title="MLS PIN ETL and API", 
+    version="2.0.0",
+    description="Automated MLS PIN data processing with hourly updates",
+    lifespan=lifespan_scheduler  # Add scheduler lifecycle management
 )
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -382,7 +394,7 @@ def list_listings(
     max_price: Optional[int] = Query(None, ge=0),
     bedrooms: Optional[int] = Query(None, ge=0),
     bathrooms: Optional[int] = Query(None, ge=0),
-    limit: int = Query(50, gt=0, le=500),
+    limit: int = Query(25000, gt=0, le=25000),
     offset: int = Query(0, ge=0),
 ):
     where, params = [], []
@@ -410,7 +422,9 @@ def list_listings(
         SELECT listing_key, data, updated_at
         FROM listings
         {where_sql}
-        ORDER BY updated_at DESC
+        ORDER BY 
+            CASE WHEN data->>'LIST_AGENT_ID' = 'CN222505' THEN 0 ELSE 1 END,
+            updated_at DESC
         LIMIT %s OFFSET %s
     """
     params.extend([limit, offset])
@@ -466,6 +480,86 @@ def health_check():
             "timestamp": datetime.now().isoformat()
         })
 
+# ─────────────────────────── AUTOMATION ENDPOINTS ────────────────────────── #
+
+@app.get("/automation/status")
+async def get_automation_status():
+    """Get the status of the automated download scheduler"""
+    try:
+        status = await get_scheduler_status()
+        return {
+            "status": "success",
+            "data": status,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get scheduler status: {e}")
+
+
+@app.post("/automation/run")
+async def trigger_automation_run():
+    """Manually trigger an automated download and processing run"""
+    try:
+        result = await trigger_manual_run()
+        return {
+            "status": "success",
+            "data": result,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to trigger manual run: {e}")
+
+
+@app.post("/automation/start")
+async def start_automation(interval_hours: int = Query(1, ge=1, le=24)):
+    """Start the automated download scheduler"""
+    try:
+        await start_scheduler(interval_hours)
+        return {
+            "status": "success",
+            "message": f"Scheduler started with {interval_hours} hour interval",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start scheduler: {e}")
+
+
+@app.post("/automation/stop")
+async def stop_automation():
+    """Stop the automated download scheduler"""
+    try:
+        await stop_scheduler()
+        return {
+            "status": "success",
+            "message": "Scheduler stopped",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to stop scheduler: {e}")
+
+
+@app.get("/automation/logs")
+async def get_automation_logs(limit: int = Query(10, ge=1, le=100)):
+    """Get recent automation run logs"""
+    try:
+        status = await get_scheduler_status()
+        run_history = status.get('stats', {}).get('run_history', [])
+        
+        # Return the most recent runs
+        recent_runs = run_history[-limit:] if run_history else []
+        
+        return {
+            "status": "success",
+            "data": {
+                "recent_runs": recent_runs,
+                "total_runs": len(run_history),
+                "stats": status.get('stats', {})
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get automation logs: {e}")
+
 @app.get("/listings/{listing_key}")
 def get_listing(listing_key: str):
     with get_conn() as conn, conn.cursor() as cur:
@@ -488,10 +582,14 @@ def get_listing(listing_key: str):
 
 @app.get("/listings/featured/all")
 def get_featured_listings():
-    """Get featured listings (first 6 listings)"""
+    """Get featured listings (first 6 listings) with Brandon's listings prioritized"""
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
-            "SELECT listing_key, data, updated_at FROM listings ORDER BY updated_at DESC LIMIT 6"
+            """SELECT listing_key, data, updated_at FROM listings 
+               ORDER BY 
+                    CASE WHEN data->'_raw_data'->>'LIST_AGENT' = 'CN222505' THEN 0 ELSE 1 END,
+                    updated_at DESC 
+               LIMIT 6"""
         )
         rows = cur.fetchall()
     
@@ -530,22 +628,7 @@ def reload_data(force: bool = True):
 
 # ───────────────────────────── SCHEDULER ────────────────────────────── #
 
-def start_scheduler():
-    try:
-        sched = AsyncIOScheduler(timezone="UTC")
-        cron_parts = SCHEDULE_CRON.split()
-        cron_kwargs = {}
-        field_names = ["minute", "hour", "day", "month", "day_of_week"]
-        
-        for field, value in zip(field_names, cron_parts):
-            if value != "*":
-                cron_kwargs[field] = int(value)
-        
-        sched.add_job(etl_job, "cron", **cron_kwargs)
-        sched.start()
-        log.info("Scheduler started (%s).", SCHEDULE_CRON)
-    except Exception as e:
-        log.warning("Scheduler failed to start: %s. Continuing without scheduler.", e)
+# Scheduler functionality moved to scheduler.py and managed via lifespan_scheduler
 
 # ─────────────────────────────── main ──────────────────────────────── #
 
@@ -557,7 +640,7 @@ def main():
         etl_job()
     else:
         log.info("Existing data found, skipping initial ETL job")
-    start_scheduler()
+    # Scheduler is now managed by FastAPI lifespan_scheduler
     uvicorn.run(app, host=API_HOST, port=API_PORT)
 
 if __name__ == "__main__":

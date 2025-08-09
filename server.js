@@ -46,9 +46,6 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve static files from public directory
-app.use(express.static('public'));
-
 // Serve admin page
 app.get('/admin', (req, res) => {
   res.sendFile(__dirname + '/public/admin.html');
@@ -106,6 +103,9 @@ app.get('/api', (req, res) => {
 
 // Use error handling middleware
 app.use(errorHandler);
+
+// Serve static files from public directory (after API routes)
+app.use(express.static('public'));
 
 // 404 handler
 app.use('*', (req, res) => {

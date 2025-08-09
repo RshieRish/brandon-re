@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Properties for Sale - SWS & Co.</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="leaflet.css" />
+    <style>
+        .listings-page {
+            padding-top: 80px;
+            min-height: 100vh;
+            background-color: #f8f9fa;
+        }
+        
+        .listings-header {
+            background: white;
+            padding: 2rem 0;
+            border-bottom: 1px solid #e9ecef;
+            margin-bottom: 2rem;
+        }
+        
+        .listings-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+        
+        .listings-subtitle {
+            color: #6c757d;
+            font-size: 1.1rem;
+        }
+        
+        .listings-container {
+            display: flex;
+            gap: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+        
+        .filters-sidebar {
+            width: 350px;
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            height: fit-content;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 100px;
+        }
+        
+        .main-content {
+            flex: 1;
+        }
+        
+        .view-toggle {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            background: white;
+            padding: 1rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .view-btn {
+            padding: 0.75rem 1.5rem;
+            border: 2px solid #e9ecef;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+        
+        .view-btn.active {
+            background: #FFD700;
+            border-color: #FFD700;
+            color: #2c3e50;
+        }
+        
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            background: white;
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .results-count {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .sort-dropdown {
+            padding: 0.5rem 1rem;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            background: white;
+        }
+        
+        .filter-section {
+            margin-bottom: 2rem;
+        }
+        
+        .filter-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .filter-title i {
+            color: #FFD700;
+        }
+        
+        .property-type-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        
+        .property-type-btn {
+            padding: 0.75rem;
+            border: 2px solid #e9ecef;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        }
+        
+        .property-type-btn.active {
+            background: #FFD700;
+            border-color: #FFD700;
+            color: #2c3e50;
+        }
+        
+        .price-range {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .price-input {
+            flex: 1;
+            padding: 0.75rem;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            min-width: 0;
+            box-sizing: border-box;
+        }
+        
+        .bedroom-bathroom-grid {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+        
+        .bed-bath-btn {
+            padding: 0.5rem 1rem;
+            border: 2px solid #e9ecef;
+            background: white;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+            min-width: 50px;
+            text-align: center;
+        }
+        
+        .bed-bath-btn.active {
+            background: #FFD700;
+            border-color: #FFD700;
+            color: #2c3e50;
+        }
+        
+        .range-slider {
+            margin: 1rem 0;
+        }
+        
+        .range-inputs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .range-input {
+            flex: 1;
+            padding: 0.5rem;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            min-width: 0;
+            box-sizing: border-box;
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .listings-container {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            
+            .filters-sidebar {
+                width: 100%;
+                position: static;
+            }
+            
+            .price-range {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .range-inputs {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+        }
+        
+        .listings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .listing-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .listing-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        .listing-image-container {
+            width: 100%;
+            height: 250px;
+            overflow: hidden;
+            position: relative;
+            background-color: #f5f5f5;
+        }
+        
+        .listing-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center;
+            transition: transform 0.3s ease;
+        }
+        
+        .listing-card:hover .listing-image {
+            transform: scale(1.05);
+        }
+        
+        .listing-content {
+            padding: 1.5rem;
+        }
+        
+        .listing-price {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+        
+        .listing-address {
+            color: #6c757d;
+            margin-bottom: 1rem;
+            font-size: 0.95rem;
+        }
+        
+        .listing-details {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .listing-detail {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        
+        .listing-detail i {
+            color: #FFD700;
+        }
+        
+        .map-container {
+            height: 600px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+        
+        .reset-filters {
+            width: 100%;
+            padding: 0.75rem;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            margin-top: 1rem;
+        }
+        
+        .show-results {
+            width: 100%;
+            padding: 0.75rem;
+            background: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            margin-top: 1rem;
+        }
+        
+        .exact-match {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        .exact-match input {
+            margin: 0;
+        }
+        
+        .exact-match label {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        
+        @media (max-width: 768px) {
+            .listings-container {
+                flex-direction: column;
+            }
+            
+            .filters-sidebar {
+                width: 100%;
+                position: static;
+            }
+            
+            .listings-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo">
+                <img src="SWS Smiley Transparent Background COLOR.png" alt="SWS & Co. Logo" class="logo-img">
+                <div class="logo-text">
+                    <h2>SWS & Co.</h2>
+                    <span class="tagline">Your Dracut Realtor</span>
+                </div>
+            </a>
+            <button class="mobile-menu-toggle" aria-label="Toggle mobile menu">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="nav-menu">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="listings.html" class="nav-link active">Listings</a>
+                <a href="index.html#about" class="nav-link">About</a>
+                <a href="index.html#contact" class="nav-link">Contact</a>
+                <a href="admin.html" class="nav-link admin-link">Admin</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="listings-page">
+        <!-- Header -->
+        <div class="listings-header">
+            <div class="container">
+                <h1 class="listings-title">Properties For Sale</h1>
+                <p class="listings-subtitle">Find your perfect home in Dracut and surrounding areas</p>
+            </div>
+        </div>
+
+        <div class="listings-container">
+            <!-- Filters Sidebar -->
+            <div class="filters-sidebar">
+                <!-- For Sale/For Rent/Sold Tabs -->
+                <div class="filter-section">
+                    <div class="property-type-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 2rem;">
+                        <button class="property-type-btn active" data-status="sale">For Sale</button>
+                        <button class="property-type-btn" data-status="rent">For Rent</button>
+                        <button class="property-type-btn" data-status="sold">Sold</button>
+                    </div>
+                </div>
+
+                <!-- Price Range -->
+                <div class="filter-section">
+                    <div class="filter-title">
+                        <i class="fas fa-dollar-sign"></i>
+                        Price Range
+                    </div>
+                    <div class="price-range">
+                        <input type="text" class="price-input" placeholder="No Min" id="minPrice">
+                        <input type="text" class="price-input" placeholder="No Max" id="maxPrice">
+                    </div>
+                </div>
+
+                <!-- Bedrooms -->
+                <div class="filter-section">
+                    <div class="filter-title">
+                        <i class="fas fa-bed"></i>
+                        Bedrooms
+                    </div>
+                    <div class="bedroom-bathroom-grid">
+                        <button class="bed-bath-btn active" data-bedrooms="any">Any</button>
+                        <button class="bed-bath-btn" data-bedrooms="1">1+</button>
+                        <button class="bed-bath-btn" data-bedrooms="2">2+</button>
+                        <button class="bed-bath-btn" data-bedrooms="3">3+</button>
+                        <button class="bed-bath-btn" data-bedrooms="4">4+</button>
+                        <button class="bed-bath-btn" data-bedrooms="5">5+</button>
+                    </div>
+                    <div class="exact-match">
+                        <input type="checkbox" id="exactBedrooms">
+                        <label for="exactBedrooms">Exact match</label>
+                    </div>
+                </div>
+
+                <!-- Bathrooms -->
+                <div class="filter-section">
+                    <div class="filter-title">
+                        <i class="fas fa-bath"></i>
+                        Bathrooms
+                    </div>
+                    <div class="bedroom-bathroom-grid">
+                        <button class="bed-bath-btn active" data-bathrooms="any">Any</button>
+                        <button class="bed-bath-btn" data-bathrooms="1">1+</button>
+                        <button class="bed-bath-btn" data-bathrooms="2">2+</button>
+                        <button class="bed-bath-btn" data-bathrooms="3">3+</button>
+                        <button class="bed-bath-btn" data-bathrooms="4">4+</button>
+                        <button class="bed-bath-btn" data-bathrooms="5">5+</button>
+                    </div>
+                    <div class="exact-match">
+                        <input type="checkbox" id="exactBathrooms">
+                        <label for="exactBathrooms">Exact match</label>
+                    </div>
+                </div>
+
+                <!-- Property Type -->
+                <div class="filter-section">
+                    <div class="filter-title">
+                        <i class="fas fa-home"></i>
+                        Property Type
+                    </div>
+                    <div class="property-type-grid">
+                        <button class="property-type-btn" data-type="houses">Houses</button>
+                        <button class="property-type-btn" data-type="apartments">Apartments</button>
+                        <button class="property-type-btn" data-type="townhomes">Townhomes</button>
+                        <button class="property-type-btn" data-type="condos">Condos</button>
+                        <button class="property-type-btn" data-type="coops">Co-ops</button>
+                        <button class="property-type-btn" data-type="lots">Lots/Land</button>
+                        <button class="property-type-btn" data-type="manufactured">Manufactured</button>
+                        <button class="property-type-btn" data-type="multifamily">Multi-family</button>
+                        <button class="property-type-btn" data-type="other">Other</button>
+                    </div>
+                </div>
+
+                <!-- Living Area -->
+                <div class="filter-section">
+                    <div class="filter-title">
+                        <i class="fas fa-expand-arrows-alt"></i>
+                        Living Area
+                    </div>
+                    <div class="range-inputs">
+                        <input type="text" class="range-input" placeholder="No Min" id="minLivingArea">
+                        <input type="text" class="range-input" placeholder="No Max" id="maxLivingArea">
+                    </div>
+                </div>
+
+                <!-- Lot Size -->
+                <div class="filter-section">
+                    <div class="filter-title">
+                        <i class="fas fa-map"></i>
+                        Lot Size
+                    </div>
+                    <div class="range-inputs">
+                        <input type="text" class="range-input" placeholder="No Min" id="minLotSize">
+                        <input type="text" class="range-input" placeholder="No Max" id="maxLotSize">
+                    </div>
+                </div>
+
+                <!-- Year Built -->
+                <div class="filter-section">
+                    <div class="filter-title">
+                        <i class="fas fa-calendar"></i>
+                        Year Built
+                    </div>
+                    <div class="range-inputs">
+                        <input type="text" class="range-input" placeholder="No Min" id="minYearBuilt">
+                        <input type="text" class="range-input" placeholder="No Max" id="maxYearBuilt">
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <button class="reset-filters" id="resetFilters">Reset All Filters</button>
+                <button class="show-results" id="showResults">Show <span id="resultsCount">4,538</span> Results</button>
+            </div>
+
+            <!-- Main Content -->
+            <div class="main-content">
+                <!-- View Toggle -->
+                <div class="view-toggle">
+                    <button class="view-btn active" data-view="list">
+                        <i class="fas fa-list"></i> List View
+                    </button>
+                    <button class="view-btn" data-view="map">
+                        <i class="fas fa-map"></i> Map View
+                    </button>
+                </div>
+
+                <!-- Results Header -->
+                <div class="results-header">
+                    <div class="results-count">
+                        <span id="currentResultsCount">50</span> of <span id="totalResultsCount">4,538</span> Results
+                    </div>
+                    <div>
+                        <label for="sortBy" style="margin-right: 0.5rem;">Sort By:</label>
+                        <select class="sort-dropdown" id="sortBy">
+                            <option value="recently-updated">Recently Updated</option>
+                            <option value="price-low-high">Price: Low to High</option>
+                            <option value="price-high-low">Price: High to Low</option>
+                            <option value="newest">Newest Listings</option>
+                            <option value="bedrooms">Bedrooms</option>
+                            <option value="bathrooms">Bathrooms</option>
+                            <option value="sqft">Square Feet</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Map Container (hidden by default) -->
+                <div class="map-container" id="mapContainer" style="display: none;">
+                    <div id="map" style="height: 100%; width: 100%;"></div>
+                </div>
+
+                <!-- Listings Grid -->
+                <div class="listings-grid" id="listingsGrid">
+                    <!-- Listings will be loaded here -->
+                </div>
+
+                <!-- Load More Button -->
+                <div class="load-more-container">
+                    <button class="btn btn-secondary" id="loadMoreBtn">
+                        Load More Listings
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="leaflet.js"></script>
+    <script src="listings.js"></script>
+</body>
+</html>
