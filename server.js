@@ -23,6 +23,7 @@ const mockDataService = require('./services/mockDataService');
 const listingsRoutes = require('./routes/listings');
 const marketRoutes = require('./routes/market');
 const adminRoutes = require('./routes/admin');
+const analyticsRoutes = require('./routes/analytics');
 
 // Security and performance middleware
 app.use(helmet({
@@ -55,6 +56,7 @@ app.get('/admin', (req, res) => {
 app.use('/api/listings', listingsRoutes);
 app.use('/api/market', marketRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // Basic health check route
 app.get('/api/health', (req, res) => {

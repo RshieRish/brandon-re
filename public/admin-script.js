@@ -112,33 +112,131 @@ function showSection(sectionName) {
 // Dashboard Data Loading
 async function loadDashboardData() {
     try {
-        // Load listings count
-        const listingsResponse = await fetch(`${API_BASE_URL}/api/listings`);
-        const listings = await listingsResponse.json();
+        // Load real analytics data
+        const analyticsResponse = await fetch(`${API_BASE_URL}/api/analytics/stats/summary`);
+        const analyticsData = await analyticsResponse.json();
         
-        document.getElementById('totalListings').textContent = listings.length;
-        
-        // Calculate average price
-        const avgPrice = listings.reduce((sum, listing) => sum + listing.price, 0) / listings.length;
-        document.getElementById('avgPrice').textContent = formatPrice(avgPrice);
-        
-        // Mock data for other stats
-        document.getElementById('totalLeads').textContent = '24';
-        document.getElementById('siteViews').textContent = '1,247';
+        if (analyticsData.success) {
+            const stats = analyticsData.data;
+            document.getElementById('totalListings').textContent = stats.totalListings || '0';
+            document.getElementById('avgPrice').textContent = formatPrice(stats.avgPrice || 0);
+            document.getElementById('totalLeads').textContent = stats.totalLeads || '0';
+            document.getElementById('siteViews').textContent = stats.siteViews ? stats.siteViews.toLocaleString() : '0';
+        } else {
+            throw new Error('Failed to load analytics data');
+        }
         
     } catch (error) {
         console.error('Error loading dashboard data:', error);
         // Set fallback values
-        document.getElementById('totalListings').textContent = '12';
-        document.getElementById('avgPrice').textContent = '$650,000';
-        document.getElementById('totalLeads').textContent = '24';
-        document.getElementById('siteViews').textContent = '1,247';
+        document.getElementById('totalListings').textContent = '0';
+        document.getElementById('avgPrice').textContent = '$0';
+        document.getElementById('totalLeads').textContent = '0';
+        document.getElementById('siteViews').textContent = '0';
     }
 }
 
 // Charts Initialization
-function initializeCharts() {
-    // Views Chart
+async function initializeCharts() {
+    try {
+        // Load real traffic data for Page Views Chart
+        const trafficResponse = await fetch(`${API_BASE_URL}/api/analytics/traffic/weekly`);
+        const trafficData = await trafficResponse.json();
+        
+        // Page Views Chart with real data
+        const viewsCtx = document.getElementById('viewsChart');
+        if (viewsCtx && trafficData.success) {
+            viewsChart = new Chart(viewsCtx, {
+                type: 'line',
+                data: {
+                    labels: trafficData.data.labels,
+                    datasets: [{
+                        label: 'Page Views',
+                        data: trafficData.data.visitors,
+                        borderColor: '#FFD700',
+                        backgroundColor: 'rgba(255, 215, 0, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#ffffff'
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: {
+                                color: '#ffffff'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        },
+                        y: {
+                            ticks: {
+                                color: '#ffffff'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Load real lead sources data for Leads Chart
+        const leadSourcesResponse = await fetch(`${API_BASE_URL}/api/analytics/leads/sources`);
+        const leadSourcesData = await leadSourcesResponse.json();
+        
+        // Leads Chart with real data
+        const leadsCtx = document.getElementById('leadsChart');
+        if (leadsCtx && leadSourcesData.success) {
+            leadsChart = new Chart(leadsCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: leadSourcesData.data.labels,
+                    datasets: [{
+                        data: leadSourcesData.data.values,
+                        backgroundColor: [
+                            '#FFD700',
+                            '#FFA500',
+                            '#FF8C00',
+                            '#FF6347'
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#ffffff',
+                                padding: 20
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+    } catch (error) {
+        console.error('Error loading chart data:', error);
+        // Initialize charts with fallback data
+        initializeFallbackCharts();
+    }
+}
+
+// Fallback function for when API data is not available
+function initializeFallbackCharts() {
+    // Page Views Chart with fallback data
     const viewsCtx = document.getElementById('viewsChart');
     if (viewsCtx) {
         viewsChart = new Chart(viewsCtx, {
@@ -185,7 +283,7 @@ function initializeCharts() {
         });
     }
     
-    // Leads Chart
+    // Leads Chart with fallback data
     const leadsCtx = document.getElementById('leadsChart');
     if (leadsCtx) {
         leadsChart = new Chart(leadsCtx, {
@@ -220,42 +318,66 @@ function initializeCharts() {
 }
 
 // Recent Activity
-function loadRecentActivity() {
-    const activities = [
-        {
-            icon: 'fas fa-home',
-            title: 'New listing added',
-            description: '123 Main St, Dracut, MA',
-            time: '2 hours ago'
-        },
-        {
-            icon: 'fas fa-user-plus',
-            title: 'New lead registered',
-            description: 'John Smith - interested in 3BR homes',
-            time: '4 hours ago'
-        },
-        {
-            icon: 'fas fa-eye',
-            title: 'Listing viewed',
-            description: '456 Oak Ave received 15 views today',
-            time: '6 hours ago'
-        },
-        {
-            icon: 'fas fa-envelope',
-            title: 'Contact form submitted',
-            description: 'Sarah Johnson requested property tour',
-            time: '1 day ago'
-        },
-        {
-            icon: 'fas fa-chart-line',
-            title: 'Price updated',
-            description: '789 Pine St price reduced to $575,000',
-            time: '2 days ago'
-        }
-    ];
-    
+async function loadRecentActivity() {
     const activityList = document.getElementById('activityList');
-    if (activityList) {
+    if (!activityList) return;
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/analytics/activity/recent`);
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+            activityList.innerHTML = data.data.map(activity => `
+                <div class="activity-item">
+                    <div class="activity-icon">
+                        <i class="${activity.icon}"></i>
+                    </div>
+                    <div class="activity-content">
+                        <h4>${activity.title}</h4>
+                        <p>${activity.description}</p>
+                    </div>
+                    <div class="activity-time">${activity.time}</div>
+                </div>
+            `).join('');
+        } else {
+            throw new Error('Failed to load activity data');
+        }
+    } catch (error) {
+        console.error('Error loading recent activity:', error);
+        // Fallback to mock data
+        const activities = [
+            {
+                icon: 'fas fa-home',
+                title: 'New listing added',
+                description: '123 Main St, Dracut, MA',
+                time: '2 hours ago'
+            },
+            {
+                icon: 'fas fa-user-plus',
+                title: 'New lead registered',
+                description: 'John Smith - interested in 3BR homes',
+                time: '4 hours ago'
+            },
+            {
+                icon: 'fas fa-eye',
+                title: 'Listing viewed',
+                description: '456 Oak Ave received 15 views today',
+                time: '6 hours ago'
+            },
+            {
+                icon: 'fas fa-envelope',
+                title: 'Contact form submitted',
+                description: 'Sarah Johnson requested property tour',
+                time: '1 day ago'
+            },
+            {
+                icon: 'fas fa-chart-line',
+                title: 'Price updated',
+                description: '789 Pine St price reduced to $575,000',
+                time: '2 days ago'
+            }
+        ];
+        
         activityList.innerHTML = activities.map(activity => `
             <div class="activity-item">
                 <div class="activity-icon">
@@ -315,42 +437,78 @@ async function loadListings() {
 }
 
 // Leads Management
-function loadLeads() {
-    const mockLeads = [
-        {
-            id: 1,
-            name: 'John Smith',
-            email: 'john@email.com',
-            phone: '(978) 555-0123',
-            interest: 'Buying - 3BR Home',
-            source: 'Website',
-            status: 'New',
-            date: '2024-01-15'
-        },
-        {
-            id: 2,
-            name: 'Sarah Johnson',
-            email: 'sarah@email.com',
-            phone: '(978) 555-0456',
-            interest: 'Selling - Current Home',
-            source: 'Referral',
-            status: 'Contacted',
-            date: '2024-01-14'
-        },
-        {
-            id: 3,
-            name: 'Mike Wilson',
-            email: 'mike@email.com',
-            phone: '(978) 555-0789',
-            interest: 'Buying - Condo',
-            source: 'Social Media',
-            status: 'Qualified',
-            date: '2024-01-13'
-        }
-    ];
-    
+async function loadLeads() {
     const tableBody = document.getElementById('leadsTableBody');
-    if (tableBody) {
+    if (!tableBody) return;
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/analytics/leads`);
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+            tableBody.innerHTML = data.data.map(lead => `
+                <tr>
+                    <td><strong>${lead.name}</strong></td>
+                    <td>${lead.email}</td>
+                    <td>${lead.phone}</td>
+                    <td>${lead.interest}</td>
+                    <td>${lead.source}</td>
+                    <td><span class="status-badge status-${lead.status.toLowerCase()}">${lead.status}</span></td>
+                    <td>${formatDate(lead.date)}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="action-btn" onclick="contactLead(${lead.id})" title="Contact">
+                                <i class="fas fa-phone"></i>
+                            </button>
+                            <button class="action-btn" onclick="editLead(${lead.id})" title="Edit">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="action-btn" onclick="deleteLead(${lead.id})" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        } else {
+            throw new Error('Failed to load leads data');
+        }
+    } catch (error) {
+        console.error('Error loading leads:', error);
+        // Fallback to mock data
+        const mockLeads = [
+            {
+                id: 1,
+                name: 'John Smith',
+                email: 'john@email.com',
+                phone: '(978) 555-0123',
+                interest: 'Buying - 3BR Home',
+                source: 'Website',
+                status: 'New',
+                date: '2024-01-15'
+            },
+            {
+                id: 2,
+                name: 'Sarah Johnson',
+                email: 'sarah@email.com',
+                phone: '(978) 555-0456',
+                interest: 'Selling - Current Home',
+                source: 'Referral',
+                status: 'Contacted',
+                date: '2024-01-14'
+            },
+            {
+                id: 3,
+                name: 'Mike Wilson',
+                email: 'mike@email.com',
+                phone: '(978) 555-0789',
+                interest: 'Buying - Condo',
+                source: 'Social Media',
+                status: 'Qualified',
+                date: '2024-01-13'
+            }
+        ];
+        
         tableBody.innerHTML = mockLeads.map(lead => `
             <tr>
                 <td><strong>${lead.name}</strong></td>
@@ -379,8 +537,87 @@ function loadLeads() {
 }
 
 // Analytics
-function loadAnalyticsData() {
-    // Traffic Chart
+async function loadAnalyticsData() {
+    try {
+        // Load real traffic data for Traffic Chart
+        const trafficResponse = await fetch(`${API_BASE_URL}/api/analytics/traffic/weekly`);
+        const trafficData = await trafficResponse.json();
+        
+        // Traffic Chart with real data
+        const trafficCtx = document.getElementById('trafficChart');
+        if (trafficCtx && !trafficChart && trafficData.success) {
+            trafficChart = new Chart(trafficCtx, {
+                type: 'bar',
+                data: {
+                    labels: trafficData.data.labels,
+                    datasets: [{
+                        label: 'Visitors',
+                        data: trafficData.data.visitors,
+                        backgroundColor: 'rgba(255, 215, 0, 0.8)',
+                        borderColor: '#FFD700',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#ffffff'
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: {
+                                color: '#ffffff'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        },
+                        y: {
+                            ticks: {
+                                color: '#ffffff'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Load real popular listings data
+        const popularResponse = await fetch(`${API_BASE_URL}/api/analytics/listings/popular`);
+        const popularData = await popularResponse.json();
+        
+        // Popular Listings with real data
+        const popularListingsContainer = document.getElementById('popularListings');
+        if (popularListingsContainer && popularData.success) {
+            popularListingsContainer.innerHTML = popularData.data.map(listing => `
+                <div class="popular-listing-item">
+                    <img src="/api/placeholder/50/40" alt="${listing.address}">
+                    <div class="popular-listing-info">
+                        <h4>${listing.address}</h4>
+                        <p>${listing.city}, MA</p>
+                    </div>
+                    <div class="popular-listing-views">${listing.views} views</div>
+                </div>
+            `).join('');
+        }
+        
+    } catch (error) {
+        console.error('Error loading analytics data:', error);
+        // Fallback to mock data
+        loadFallbackAnalyticsData();
+    }
+}
+
+// Fallback function for analytics data
+function loadFallbackAnalyticsData() {
+    // Traffic Chart with fallback data
     const trafficCtx = document.getElementById('trafficChart');
     if (trafficCtx && !trafficChart) {
         trafficChart = new Chart(trafficCtx, {
@@ -426,7 +663,7 @@ function loadAnalyticsData() {
         });
     }
     
-    // Popular Listings
+    // Popular Listings with fallback data
     const popularListings = [
         { address: '123 Main St', city: 'Dracut', views: 245 },
         { address: '456 Oak Ave', city: 'Lowell', views: 189 },
@@ -675,7 +912,8 @@ function formatPrice(price) {
 }
 
 function formatDate(dateString) {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric'

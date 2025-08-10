@@ -1,13 +1,63 @@
 /* Admin Panel Specific Styles */
 
-/* Admin Body */
-.admin-body {
+/* Reset HTML and body for admin pages */
+html {
     margin: 0;
     padding: 0;
+    height: 100%;
+}
+
+html.admin-html {
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 100vh;
+    height: 100dvh;
+}
+
+/* Admin Body */
+.admin-body {
+    margin: 0 !important;
+    padding: 0 !important;
     background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
     min-height: 100vh;
+    min-height: 100dvh;
     font-family: 'Inter', sans-serif;
     color: var(--text-light);
+    /* Override ALL global styles that could cause white space */
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    /* Ensure full viewport coverage */
+    height: 100vh;
+    height: 100dvh;
+    /* Remove any inherited spacing */
+    border: none;
+    outline: none;
+}
+
+/* Override main site body styles when on admin page */
+html.admin-html body.admin-body {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin: 0 !important;
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%) !important;
+    overflow-x: hidden;
+}
+
+/* Even more specific override */
+html.admin-html body {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin: 0 !important;
 }
 
 /* Admin Navigation */
@@ -20,6 +70,8 @@
     top: 0;
     z-index: 1000;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    /* Ensure navbar starts at absolute top */
+    margin-top: 0;
 }
 
 .admin-nav-container {
