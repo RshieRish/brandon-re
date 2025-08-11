@@ -1,0 +1,90 @@
+/* Safari-specific fixes for Brandon Sweeney website */
+
+/* Safari font loading optimization */
+@supports (-webkit-appearance: none) {
+    /* Ensure fonts are loaded properly in Safari */
+    body {
+        font-display: swap;
+    }
+    
+    /* Fix for Safari's handling of calc() with custom properties */
+    body {
+        padding-top: 60px !important; /* Fixed value instead of calc() */
+    }
+    
+    /* Safari sometimes needs explicit font fallbacks */
+    body, .nav-container, .hero-content, .about-text {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    }
+    
+    /* Safari backdrop-filter fallback */
+    .navbar {
+        background: rgba(255, 255, 255, 0.9) !important;
+        -webkit-backdrop-filter: blur(16px) !important;
+        backdrop-filter: blur(16px) !important;
+    }
+    
+    .btn {
+        -webkit-backdrop-filter: blur(8px) !important;
+        backdrop-filter: blur(8px) !important;
+    }
+    
+    /* Safari-specific font weight fixes */
+    h1, h2, h3, h4, h5, h6 {
+        font-weight: 600 !important;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+    
+    /* Fix for Safari video element issues */
+    .hero-video video {
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
+    }
+    
+    /* Safari safe area compatibility */
+    @supports (padding: max(0px)) {
+        .navbar {
+            padding-left: max(env(safe-area-inset-left), 1rem);
+            padding-right: max(env(safe-area-inset-right), 1rem);
+        }
+        
+        body {
+            padding-top: max(60px, env(safe-area-inset-top));
+        }
+    }
+    
+    /* Force font awesome to load */
+    .fas, .far, .fab {
+        font-family: "Font Awesome 6 Free", "Font Awesome 5 Free", "FontAwesome" !important;
+        font-weight: 900 !important;
+        font-style: normal !important;
+        text-rendering: auto;
+        -webkit-font-smoothing: antialiased;
+    }
+    
+    /* Fix clamp() issues in older Safari versions */
+    @supports not (font-size: clamp(1rem, 4vw, 2rem)) {
+        :root {
+            --font-size-hero: 2.5rem;
+            --font-size-xl: 1.5rem;
+            --font-size-large: 1.25rem;
+            --font-size-base: 1rem;
+            --font-size-small: 0.875rem;
+        }
+    }
+}
+
+/* Webkit-specific adjustments */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+    /* Additional Safari targeting */
+    body {
+        -webkit-text-size-adjust: 100%;
+    }
+    
+    /* Fix for Safari's handling of viewport units */
+    .hero {
+        height: 100vh;
+        height: -webkit-fill-available;
+    }
+}
