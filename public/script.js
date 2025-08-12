@@ -418,7 +418,7 @@ function generatePhotoURL(mlsId, photoNumber, width, height) {
 function createListingCard(listing) {
     // Handle both API data structure and mock data structure
     const price = formatPrice(
-        listing.price?.amount || listing.price || 0
+        listing.price || 0
     );
     
     // Handle address - could be string or object
@@ -430,10 +430,10 @@ function createListingCard(listing) {
         address = `${addr.street || ''}, ${addr.city || ''}, ${addr.state || 'MA'} ${addr.zipCode || ''}`.replace(/,\s*,/g, ',').trim();
     }
     
-    const bedrooms = listing.bedrooms || listing.property?.bedrooms || 'N/A';
-    const bathrooms = listing.bathrooms || listing.property?.bathrooms || 'N/A';
-    const halfBathrooms = listing.halfBathrooms || listing.property?.halfBaths || 0;
-    const sqft = listing.sqft || listing.squareFootage || listing.property?.squareFeet || 'N/A';
+    const bedrooms = listing.bedrooms || 'N/A';
+    const bathrooms = listing.bathrooms || 'N/A';
+    const halfBathrooms = listing.halfBathrooms || 0;
+    const sqft = listing.sqft || 'N/A';
     const stories = listing.stories || listing.property?.stories || null;
     const mlsId = listing.id || listing.mlsNumber || 'unknown';
     const description = listing.description || listing.detailedRemarks || `Beautiful property in Boston`;

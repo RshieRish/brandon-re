@@ -397,33 +397,43 @@ async function loadRecentActivity() {
 async function loadListings() {
     try {
         const response = await fetch(`${API_BASE_URL}/api/listings`);
-        const listings = await response.json();
+        const data = await response.json();
+        
+        // Extract listings from the API response structure
+        let listings = [];
+        if (data.success && data.data && data.data.data) {
+            listings = data.data.data;
+        } else if (Array.isArray(data)) {
+            listings = data;
+        } else {
+            console.error('Unexpected API response structure:', data);
+        }
         
         const tableBody = document.getElementById('listingsTableBody');
         if (tableBody) {
             tableBody.innerHTML = listings.map(listing => `
                 <tr>
                     <td>
-                        <img src="${listing.photos && listing.photos[0] ? listing.photos[0] : '/api/placeholder/60/45'}" 
+                        <img src="${listing.images && listing.images[0] ? listing.images[0] : 'https://via.placeholder.com/60x45/000000/FFD700?text=No+Image'}" 
                              alt="${listing.address}" class="listing-photo">
                     </td>
                     <td>
                         <strong>${listing.address}</strong><br>
-                        <small>${listing.city}, ${listing.state} ${listing.zipCode}</small>
+                        <small>MLS# ${listing.mlsNumber}</small>
                     </td>
                     <td>${formatPrice(listing.price)}</td>
                     <td>${listing.bedrooms}/${listing.bathrooms}</td>
-                    <td><span class="status-badge status-active">Active</span></td>
-                    <td>${Math.floor(Math.random() * 30) + 1} days</td>
+                    <td><span class="status-badge status-active">${listing.status || 'Active'}</span></td>
+                    <td>${listing.daysOnMarket || 1} days</td>
                     <td>
                         <div class="action-buttons">
-                            <button class="action-btn" onclick="editListing('${listing.mlsId}')" title="Edit">
+                            <button class="action-btn" onclick="editListing('${listing.mlsNumber}')" title="Edit">
                                 <i class="fas fa-edit"></i>
                             </button>
-                            <button class="action-btn" onclick="viewListing('${listing.mlsId}')" title="View">
+                            <button class="action-btn" onclick="viewListing('${listing.mlsNumber}')" title="View">
                                 <i class="fas fa-eye"></i>
                             </button>
-                            <button class="action-btn" onclick="deleteListing('${listing.mlsId}')" title="Delete">
+                            <button class="action-btn" onclick="deleteListing('${listing.mlsNumber}')" title="Delete">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
@@ -832,7 +842,7 @@ function editListing(mlsId) {
 }
 
 function viewListing(mlsId) {
-    window.open(`/listing/${mlsId}`, '_blank');
+    window.open(`/listing.html?id=${encodeURIComponent(mlsId)}`, '_blank');
 }
 
 function deleteListing(mlsId) {
