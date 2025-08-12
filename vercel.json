@@ -24,6 +24,10 @@
       "dest": "/public/listing.html"
     },
     {
+      "src": "/listings.html",
+      "dest": "/public/listings.html"
+    },
+    {
       "src": "/(.*\\.(css|js|png|jpg|jpeg|gif|svg|ico|mp4))",
       "dest": "/public/$1"
     },
