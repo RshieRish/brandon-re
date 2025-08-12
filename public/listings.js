@@ -1,3 +1,31 @@
+// Safari compatibility polyfills
+if (window.NodeList && !NodeList.prototype.forEach) {
+    NodeList.prototype.forEach = Array.prototype.forEach;
+}
+
+if (!window.URLSearchParams) {
+    window.URLSearchParams = function(searchString) {
+        const params = {};
+        if (searchString) {
+            searchString.split('&').forEach(function(pair) {
+                if (!pair) return;
+                const [key, value] = pair.split('=');
+                params[decodeURIComponent(key)] = decodeURIComponent(value || '');
+            });
+        }
+        this.append = function(key, value) {
+            params[key] = value;
+        };
+        this.toString = function() {
+            return Object.keys(params)
+                .map(function(key) {
+                    return encodeURIComponent(key) + '=' + encodeURIComponent(params[key]);
+                })
+                .join('&');
+        };
+    };
+}
+
 // Listings page functionality
 class ListingsPage {
     constructor() {
