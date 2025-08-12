@@ -9,6 +9,17 @@ const { searchLimiter } = require('../middleware');
 // Use Python API service for real MLS data
 const dataService = pythonApiService;
 
+// Map frontend status values to MLS status codes
+function mapFrontendStatusToMLS(frontendStatus) {
+  const statusMapping = {
+    'sale': ['ACT', 'CTG', 'NEW', 'PCG', 'BOM', 'EXT'],  // For Sale
+    'rent': ['RAC'],  // For Rent
+    'sold': ['SOLD']  // Sold
+  };
+  
+  return statusMapping[frontendStatus] || [frontendStatus];
+}
+
 console.log('🔧 Using PYTHON API data service for real MLS data');
 console.log('📡 Connecting to Python API at', process.env.PYTHON_API_URL || 'http://localhost:8000');
 
@@ -22,57 +33,106 @@ pythonApiService.healthCheck().then(health => {
 // Get all listings with filters
 router.get('/', async (req, res) => {
   try {
-    const { city, minPrice, maxPrice, propertyType, bedrooms, bathrooms, page = 1, limit } = req.query;
+    const { city, minPrice, maxPrice, propertyType, bedrooms, bathrooms, page = 1, limit = 50, status, exclude_sold } = req.query;
     
-    const filters = {
+    // Handle multiple status parameters (status can be a string or array)
+    let statusArray = null;
+    if (status) {
+      const statusValues = Array.isArray(status) ? status : [status];
+      // Map frontend status values to MLS status codes
+      statusArray = [];
+      for (const statusValue of statusValues) {
+        const mlsStatuses = mapFrontendStatusToMLS(statusValue);
+        statusArray.push(...mlsStatuses);
+      }
+    }
+    
+    const baseFilters = {
       city,
       minPrice: minPrice ? parseInt(minPrice) : undefined,
       maxPrice: maxPrice ? parseInt(maxPrice) : undefined,
       propertyType,
       bedrooms: bedrooms ? parseInt(bedrooms) : undefined,
-      bathrooms: bathrooms ? parseInt(bathrooms) : undefined
+      bathrooms: bathrooms ? parseInt(bathrooms) : undefined,
+      exclude_sold: exclude_sold === 'true',
+      limit: parseInt(limit),
+      offset: (parseInt(page) - 1) * parseInt(limit)
     };
     
-    const listings = await dataService.getListings(filters);
+    let result;
     
-    // Return all listings without pagination by default
-    if (!limit) {
-      res.json({
-        success: true,
-        data: {
-          data: listings || [],
-          pagination: {
-            currentPage: 1,
-            totalPages: 1,
-            totalItems: listings ? listings.length : 0,
-            itemsPerPage: listings ? listings.length : 0
-          }
-        }
-      });
-      return;
+    // If we have multiple status codes (like for 'sale'), we need to make separate calls
+    // because the Python API doesn't support multiple status as OR conditions
+    if (statusArray && statusArray.length > 1) {
+      // For multiple status codes, we need to aggregate results
+      const allListings = [];
+      let totalCount = 0;
+      
+      // Get total count for all status codes first
+      const countPromises = statusArray.map(statusCode => 
+        dataService.getListings({ ...baseFilters, status: statusCode, limit: 50000, offset: 0 })
+          .then(result => result.totalCount || 0)
+      );
+      
+      const counts = await Promise.all(countPromises);
+      totalCount = counts.reduce((sum, count) => sum + count, 0);
+      
+      // For pagination, we need to get listings from each status until we have enough
+      let remainingLimit = parseInt(limit);
+      let currentOffset = (parseInt(page) - 1) * parseInt(limit);
+      
+      for (const statusCode of statusArray) {
+        if (remainingLimit <= 0) break;
+        
+        const statusResult = await dataService.getListings({
+          ...baseFilters,
+          status: statusCode,
+          limit: Math.min(remainingLimit, 50),
+          offset: Math.max(0, currentOffset)
+        });
+        
+        const statusListings = statusResult.data || statusResult || [];
+        allListings.push(...statusListings.slice(0, remainingLimit));
+        remainingLimit -= statusListings.length;
+        currentOffset = Math.max(0, currentOffset - (statusResult.totalCount || 0));
+      }
+      
+      result = {
+        data: allListings,
+        totalCount: totalCount
+      };
+    } else {
+      // Single status or no status filter
+      const filters = {
+        ...baseFilters,
+        status: statusArray && statusArray.length === 1 ? statusArray[0] : statusArray
+      };
+      result = await dataService.getListings(filters);
     }
     
-    // Handle pagination only when limit is specified
-    const currentPage = parseInt(page) || 1;
-    const itemsPerPage = parseInt(limit);
-    const totalItems = listings ? listings.length : 0;
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const paginatedData = listings ? listings.slice(startIndex, endIndex) : [];
-    const pagination = getPaginationInfo(currentPage, itemsPerPage, totalItems);
+    // Handle both old format (array) and new format (object with data/totalCount)
+    const listings = result.data || result || [];
+    const totalCount = result.totalCount || listings.length;
     
+    // Return paginated results
     res.json({
       success: true,
       data: {
-        data: paginatedData,
-        pagination
+        data: listings,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(totalCount / parseInt(limit)),
+          totalItems: totalCount,
+          itemsPerPage: parseInt(limit)
+        }
       }
     });
   } catch (error) {
     console.error('Error fetching listings:', error);
     res.status(500).json({
       success: false,
-      message: 'Unable to load listings at this time'
+      error: 'Failed to fetch listings',
+      message: error.message
     });
   }
 });
@@ -93,6 +153,65 @@ router.get('/featured/all', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Unable to load featured listings at this time'
+    });
+  }
+});
+
+// Get counts by status - MUST be before /:mlsId route to avoid conflicts
+router.get('/counts/by-status', async (req, res) => {
+  try {
+    const { city, minPrice, maxPrice, propertyType, bedrooms, bathrooms } = req.query;
+    
+    const baseFilters = {
+      city,
+      minPrice: minPrice ? parseInt(minPrice) : undefined,
+      maxPrice: maxPrice ? parseInt(maxPrice) : undefined,
+      propertyType,
+      bedrooms: bedrooms ? parseInt(bedrooms) : undefined,
+      bathrooms: bathrooms ? parseInt(bathrooms) : undefined,
+      limit: 50000, // Very high limit to get all records for accurate counts
+      offset: 0
+    };
+    
+    // Get counts for each status using actual MLS status codes
+    // Since Python API doesn't support multiple status as OR, we need to sum individual counts
+    // Note: We pass status as string, not array, to avoid the array conversion in pythonApiService
+    const [allCount, actCount, ctgCount, newCount, pcgCount, bomCount, extCount, rentCount, soldCount] = await Promise.all([
+      // All active listings (exclude sold)
+      dataService.getListings({ ...baseFilters, exclude_sold: true }).then(result => result.totalCount || 0),
+      // Individual sale status counts - pass as string to avoid array conversion
+      dataService.getListings({ ...baseFilters, status: 'ACT' }).then(result => result.totalCount || 0),
+      dataService.getListings({ ...baseFilters, status: 'CTG' }).then(result => result.totalCount || 0),
+      dataService.getListings({ ...baseFilters, status: 'NEW' }).then(result => result.totalCount || 0),
+      dataService.getListings({ ...baseFilters, status: 'PCG' }).then(result => result.totalCount || 0),
+      dataService.getListings({ ...baseFilters, status: 'BOM' }).then(result => result.totalCount || 0),
+      dataService.getListings({ ...baseFilters, status: 'EXT' }).then(result => result.totalCount || 0),
+      // For rent listings (RAC)
+      dataService.getListings({ ...baseFilters, status: 'RAC' }).then(result => result.totalCount || 0),
+      // Sold listings
+      dataService.getSoldListings(baseFilters).then(result => Array.isArray(result) ? result.length : (result.data ? result.data.length : 0))
+    ]);
+    
+    // Sum up all sale status counts
+    const saleCount = actCount + ctgCount + newCount + pcgCount + bomCount + extCount;
+    
+    console.log('📊 Status counts:', { all: allCount, sale: saleCount, rent: rentCount, sold: soldCount });
+    
+    res.json({
+      success: true,
+      data: {
+        all: allCount,
+        sale: saleCount,
+        rent: rentCount,
+        sold: soldCount
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching status counts:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch status counts',
+      message: error.message
     });
   }
 });
@@ -270,4 +389,5 @@ router.get('/sold/recent', async (req, res) => {
   }
 });
 
+// Get total counts by status for accurate filter display
 module.exports = router;

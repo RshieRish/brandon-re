@@ -2,12 +2,14 @@
 class ListingsPage {
     constructor() {
         this.currentPage = 1;
-        this.itemsPerPage = 50; // Show more listings per page
+        this.itemsPerPage = 50;
         this.totalListings = 0;
+        this.totalAvailable = 0; // Add this to track total from API
         this.currentListings = [];
         this.allListings = [];
+        this.statusCounts = { all: 0, sale: 0, rent: 0, sold: 0 }; // Track counts by status
         this.filters = {
-            status: 'sale',
+            status: 'sale', // Default to showing for sale listings
             minPrice: null,
             maxPrice: null,
             bedrooms: 'any',
@@ -31,8 +33,34 @@ class ListingsPage {
 
     init() {
         this.setupEventListeners();
+        this.loadStatusCounts();
         this.loadListings();
         this.initializeMap();
+    }
+
+    async loadStatusCounts() {
+        try {
+            const params = new URLSearchParams();
+            
+            // Add current filters to get accurate counts
+            if (this.filters.city) params.append('city', this.filters.city);
+            if (this.filters.minPrice) params.append('minPrice', this.filters.minPrice);
+            if (this.filters.maxPrice) params.append('maxPrice', this.filters.maxPrice);
+            if (this.filters.propertyType) params.append('propertyType', this.filters.propertyType);
+            if (this.filters.bedrooms && this.filters.bedrooms !== 'any') params.append('bedrooms', this.filters.bedrooms);
+            if (this.filters.bathrooms && this.filters.bathrooms !== 'any') params.append('bathrooms', this.filters.bathrooms);
+            
+            const url = `/api/listings/counts/by-status?${params.toString()}`;
+            const response = await fetch(url);
+            const data = await response.json();
+            
+            if (data.success) {
+                this.statusCounts = data.data;
+                console.log('📊 Status counts loaded:', this.statusCounts);
+            }
+        } catch (error) {
+            console.error('❌ Error loading status counts:', error);
+        }
     }
 
     setupEventListeners() {
@@ -42,7 +70,14 @@ class ListingsPage {
                 document.querySelectorAll('[data-status]').forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
                 this.filters.status = e.target.dataset.status;
-                this.applyFilters();
+                
+                // Reset pagination when changing status
+                this.currentPage = 1;
+                
+                // Reload status counts and listings
+                this.loadStatusCounts().then(() => {
+                    this.loadListings();
+                });
             });
         });
 
@@ -158,22 +193,112 @@ class ListingsPage {
     async loadListings() {
         try {
             this.showLoading();
-            const response = await fetch('http://localhost:3001/api/listings');
+            
+            // Determine API URL and parameters based on filter status
+            let apiUrl = '/api/listings';
+            const params = new URLSearchParams();
+            
+            if (this.filters.status === 'sold') {
+                apiUrl = '/api/listings/sold/recent';
+            } else {
+                // For active listings, use proper pagination
+                params.append('limit', '50'); // Load only 50 at a time
+                params.append('page', this.currentPage.toString());
+                
+                if (this.filters.status === 'all') {
+                    params.append('exclude_sold', 'true');
+                } else {
+                    // Filter by specific status (sale or rent)
+                    params.append('status', this.filters.status);
+                    params.append('exclude_sold', 'true');
+                }
+            }
+            
+            // Add other filters
+            if (this.filters.city) params.append('city', this.filters.city);
+            if (this.filters.minPrice) params.append('minPrice', this.filters.minPrice);
+            if (this.filters.maxPrice) params.append('maxPrice', this.filters.maxPrice);
+            if (this.filters.propertyType) params.append('propertyType', this.filters.propertyType);
+            // Only add bedroom/bathroom filters if they're not 'any'
+            if (this.filters.bedrooms && this.filters.bedrooms !== 'any') params.append('bedrooms', this.filters.bedrooms);
+            if (this.filters.bathrooms && this.filters.bathrooms !== 'any') params.append('bathrooms', this.filters.bathrooms);
+            
+            const fullUrl = params.toString() ? `${apiUrl}?${params.toString()}` : apiUrl;
+            console.log('Loading listings from:', fullUrl);
+            
+            const response = await fetch(fullUrl);
             const data = await response.json();
             
-            if (data.success && data.data && data.data.data) {
-                this.allListings = data.data.data;
-                this.totalListings = data.data.data.length;
+            console.log('API Response structure:', data);
+            
+            // Extract total count from API response
+            let totalCount = 0;
+            let listingsArray = null;
+            
+            if (data && Array.isArray(data)) {
+                listingsArray = data;
+                totalCount = data.length; // For simple array responses
+            } else if (data?.success && Array.isArray(data?.data?.data)) {
+                listingsArray = data.data.data;
+                totalCount = data.data.pagination?.totalItems || data.data.total || data.total || listingsArray.length;
+            } else if (Array.isArray(data?.data)) {
+                listingsArray = data.data;
+                totalCount = data.total || listingsArray.length;
+            }
+            
+            if (listingsArray && listingsArray.length >= 0) {
+                // For pagination, append to existing listings or replace
+                if (this.currentPage === 1) {
+                    this.allListings = listingsArray;
+                    this.totalAvailable = totalCount; // Set total available
+                } else {
+                    this.allListings = [...this.allListings, ...listingsArray];
+                    // Keep the same total available count
+                }
+                
+                console.log(`✅ Loaded ${listingsArray.length} listings for page ${this.currentPage}, total loaded: ${this.allListings.length}, total available: ${this.totalAvailable}`);
+                
+                this.totalListings = this.allListings.length;
                 this.applyFilters();
+                
+                // Hide loading state
+                document.getElementById('listingsGrid').style.display = 'grid';
+                this.hideLoading();
+                
+                // Show "Load More" button if there are more listings
+                if (listingsArray.length === 50) {
+                    this.showLoadMoreButton();
+                } else {
+                    this.hideLoadMoreButton();
+                }
+                
             } else {
-                this.showError('Failed to load listings');
+                console.error('❌ Invalid API response structure:', data);
+                this.showError('Unable to load listings. Please check API connection.');
             }
         } catch (error) {
-            console.error('Error loading listings:', error);
-            this.showError('Failed to load listings');
-            // Load sample data for demo
-            this.loadSampleData();
+            console.error('❌ Network error loading listings:', error);
+            this.showError('Failed to connect to listings API. Please check network connection.');
         }
+    }
+
+    mapPropertyType(type) {
+        const typeMapping = {
+            'Single Family Residential': 'houses',
+            'Condominium': 'condos',
+            'Townhouse': 'townhomes',
+            'Multi-Family': 'multifamily'
+        };
+        return typeMapping[type] || 'other';
+    }
+
+    mapStatus(status) {
+        const statusMapping = {
+            'Active': 'sale',
+            'Pending': 'sale',
+            'Sold': 'sold'
+        };
+        return statusMapping[status] || 'sale';
     }
 
     loadSampleData() {
@@ -300,8 +425,7 @@ class ListingsPage {
     applyFilters() {
         let filtered = [...this.allListings];
 
-        // Status filter
-        filtered = filtered.filter(listing => listing.status === this.filters.status);
+        // Status filtering is now handled at API level, no need for client-side filtering
 
         // Price filter
         if (this.filters.minPrice) {
@@ -363,7 +487,15 @@ class ListingsPage {
         }
 
         this.currentListings = filtered;
-        this.currentPage = 1;
+        
+        // When filters change, we need to reload from API to get accurate total
+        // Reset to page 1 and reload
+        if (this.currentPage !== 1) {
+            this.currentPage = 1;
+            this.loadListings(); // Reload with new filters
+            return;
+        }
+        
         this.updateResultsCount();
         this.renderListings();
         this.updateMapMarkers();
@@ -412,18 +544,25 @@ class ListingsPage {
 
     renderListings() {
         const grid = document.getElementById('listingsGrid');
-        const startIndex = 0;
-        const endIndex = this.currentPage * this.itemsPerPage;
-        const listingsToShow = this.currentListings.slice(startIndex, endIndex);
-
-        grid.innerHTML = listingsToShow.map(listing => this.createListingCard(listing)).join('');
+        
+        // Calculate pagination
+        const startIndex = (this.currentPage - 1) * this.itemsPerPage;
+        const endIndex = startIndex + this.itemsPerPage;
+        const paginatedListings = this.currentListings.slice(startIndex, endIndex);
+        
+        // Show only current page listings
+        if (this.currentPage === 1) {
+            grid.innerHTML = paginatedListings.map(listing => this.createListingCard(listing)).join('');
+        } else {
+            // Append to existing listings for "load more" functionality
+            grid.innerHTML += paginatedListings.map(listing => this.createListingCard(listing)).join('');
+        }
         
         // Show/hide load more button
         const loadMoreBtn = document.getElementById('loadMoreBtn');
-        if (endIndex < this.currentListings.length) {
-            loadMoreBtn.style.display = 'block';
-        } else {
-            loadMoreBtn.style.display = 'none';
+        const hasMoreListings = endIndex < this.currentListings.length;
+        if (loadMoreBtn) {
+            loadMoreBtn.style.display = hasMoreListings ? 'block' : 'none';
         }
     }
 
@@ -431,16 +570,34 @@ class ListingsPage {
         const BRANDON_AGENT_ID = 'CN222505';
         const isBrandonListing = listing.LIST_AGENT_ID === BRANDON_AGENT_ID;
         const agentBadge = isBrandonListing ? '<div class="brandon-badge">Featured by Brandon</div>' : '';
+        const addressText = this.getAddressString(listing);
+        
+        // Safe image handling with proper fallbacks
+        const defaultImage = 'https://via.placeholder.com/400x300/cccccc/666666?text=Property+Image';
+        let primaryImage = defaultImage;
+        let fallbackImage = defaultImage;
+        
+        if (listing.images && Array.isArray(listing.images) && listing.images.length > 0) {
+            // Use first valid image, filter out undefined/null values
+            const validImages = listing.images.filter(img => img && img !== undefined && img !== 'undefined');
+            if (validImages.length > 0) {
+                primaryImage = validImages[0];
+                fallbackImage = validImages.length > 1 ? validImages[validImages.length - 1] : defaultImage;
+            }
+        } else if (listing.featuredImage && listing.featuredImage !== undefined && listing.featuredImage !== 'undefined') {
+            primaryImage = listing.featuredImage;
+            fallbackImage = defaultImage;
+        }
         
         return `
             <div class="listing-card ${isBrandonListing ? 'brandon-listing' : ''}" onclick="window.location.href='property.html?id=${listing.id}'">
                 <div class="listing-image-container">
-                    <img src="${listing.images[0]}" alt="Property" class="listing-image" onerror="this.src='${listing.images[listing.images.length - 1]}'">
+                    <img src="${primaryImage}" alt="Property" class="listing-image" onerror="this.src='${fallbackImage}'">
                     ${agentBadge}
                 </div>
                 <div class="listing-content">
                     <div class="listing-price">$${this.formatPrice(listing.price)}</div>
-                    <div class="listing-address">${listing.address}</div>
+                    <div class="listing-address">${addressText}</div>
                     <div class="listing-details">
                         <div class="listing-detail">
                             <i class="fas fa-bed"></i>
@@ -463,15 +620,40 @@ class ListingsPage {
 
     loadMoreListings() {
         this.currentPage++;
-        this.renderListings();
-        this.updateResultsCount();
+        this.loadListings(); // This will append new results
+    }
+    
+    showLoadMoreButton() {
+        const loadMoreBtn = document.getElementById('loadMoreBtn');
+        if (loadMoreBtn) {
+            loadMoreBtn.style.display = 'block';
+        }
+    }
+    
+    hideLoadMoreButton() {
+        const loadMoreBtn = document.getElementById('loadMoreBtn');
+        if (loadMoreBtn) {
+            loadMoreBtn.style.display = 'none';
+        }
     }
 
     updateResultsCount() {
-        const currentCount = Math.min(this.currentPage * this.itemsPerPage, this.currentListings.length);
-        document.getElementById('currentResultsCount').textContent = currentCount;
-        document.getElementById('totalResultsCount').textContent = this.currentListings.length;
-        document.getElementById('resultsCount').textContent = this.currentListings.length;
+        // Use filtered results for current display
+        const currentlyShowing = this.currentListings.length;
+        
+        // Use status-specific total count
+        const totalForFilter = this.statusCounts[this.filters.status] || this.totalAvailable;
+        
+        // Update result count displays
+        const currentResultsElement = document.getElementById('currentResultsCount');
+        const totalResultsElement = document.getElementById('totalResultsCount');
+        const resultsCountElement = document.getElementById('resultsCount');
+        
+        if (currentResultsElement) currentResultsElement.textContent = currentlyShowing;
+        if (totalResultsElement) totalResultsElement.textContent = totalForFilter;
+        if (resultsCountElement) resultsCountElement.textContent = totalForFilter;
+        
+        console.log(`📊 Results: ${currentlyShowing} of ${totalForFilter} (status: ${this.filters.status})`);
     }
 
     toggleView() {
@@ -523,7 +705,7 @@ class ListingsPage {
                         <div style="text-align: center;">
                             <img src="${listing.images[0]}" style="width: 150px; height: 100px; object-fit: cover; border-radius: 4px; margin-bottom: 8px;" onerror="this.src='https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=400'">
                             <div style="font-weight: bold; font-size: 16px; margin-bottom: 4px;">$${this.formatPrice(listing.price)}</div>
-                            <div style="font-size: 12px; color: #666; margin-bottom: 8px;">${listing.address}</div>
+                            <div style="font-size: 12px; color: #666; margin-bottom: 8px;">${this.getAddressString(listing)}</div>
                             <div style="font-size: 12px;">${listing.bedrooms} bd • ${listing.bathrooms} ba • ${this.formatNumber(listing.sqft)} sqft</div>
                             <button onclick="window.location.href='property.html?id=${listing.id}'" style="margin-top: 8px; padding: 4px 12px; background: #FFD700; border: none; border-radius: 4px; cursor: pointer;">View Details</button>
                         </div>
@@ -590,6 +772,30 @@ class ListingsPage {
         return new Intl.NumberFormat('en-US').format(num);
     }
 
+    // New: Safely get address as a string from various shapes
+    getAddressString(listing) {
+        const addr = listing && listing.address;
+        if (!addr) return 'Address not available';
+        if (typeof addr === 'string') return addr;
+        if (typeof addr === 'object') {
+            const parts = [];
+            const streetNumber = addr.streetNumber || addr.StreetNumber || addr.street_no || addr.number;
+            const streetName = addr.streetName || addr.StreetName || addr.street || addr.road;
+            const unit = addr.unit || addr.UnitNumber || addr.unitNumber || addr.apartment;
+            const city = addr.city || addr.City;
+            const state = addr.state || addr.StateOrProvince || addr.stateOrProvince;
+            const zip = addr.zip || addr.ZipCode || addr.postalCode || addr.PostalCode;
+            if (streetNumber && streetName) parts.push(`${streetNumber} ${streetName}`);
+            else if (streetName) parts.push(streetName);
+            if (unit) parts.push(`#${unit}`);
+            if (city) parts.push(city);
+            if (state) parts.push(state);
+            if (zip) parts.push(zip);
+            return parts.filter(Boolean).join(', ') || 'Address not available';
+        }
+        return 'Address not available';
+    }
+
     showLoading() {
         const grid = document.getElementById('listingsGrid');
         grid.innerHTML = `
@@ -598,6 +804,14 @@ class ListingsPage {
                 <p style="margin-top: 1rem; color: #6c757d;">Loading listings...</p>
             </div>
         `;
+    }
+
+    hideLoading() {
+        // Clear loading state - listings will be rendered by renderListings()
+        const grid = document.getElementById('listingsGrid');
+        if (grid.innerHTML.includes('fa-spinner')) {
+            grid.innerHTML = '';
+        }
     }
 
     showError(message) {

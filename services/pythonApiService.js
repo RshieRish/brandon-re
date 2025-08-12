@@ -7,7 +7,7 @@ class PythonApiService {
     this.useFallback = process.env.NODE_ENV === 'production' && !process.env.PYTHON_API_URL;
     this.client = axios.create({
       baseURL: this.baseURL,
-      timeout: 5000, // Reduced timeout for faster fallback
+      timeout: 60000, // Increased timeout for large dataset loading
       headers: {
         'Content-Type': 'application/json'
       }
@@ -38,6 +38,11 @@ class PythonApiService {
       data,
       timestamp: Date.now()
     });
+  }
+
+  clearCache() {
+    this.cache.clear();
+    console.log('🗑️ Cache cleared');
   }
 
   transformListings(rawListings) {
@@ -101,10 +106,13 @@ class PythonApiService {
       const fireplace = data.FireplacesTotal || data.FIREPLACE || data.NO_FIREPLACES || data._raw_data?.FIREPLACE || null;
       const detailedRemarks = data.PublicRemarks || data.REMARKS || data.DETAILED_REMARKS || data._raw_data?.REMARKS || data.RemarksConcat || '';
       
+      const price = parseInt(data.ListPrice || data.LIST_PRICE) || 0;
+      const rawStatus = data.ListingStatus || data.STATUS;
+      
       return {
         id: listing.listing_key || data.ListingKey || data.LIST_NO || data.ListingID || Math.random().toString(36).substr(2, 9),
         mlsNumber: data.LIST_NO || data.ListingID || data.MLS_NO || 'N/A',
-        price: parseInt(data.ListPrice || data.LIST_PRICE) || 0,
+        price: price,
         address: formattedAddress || 'Address not available',
         bedrooms: parseInt(data.BedroomsTotal || data.BEDROOMS || data.NO_BEDROOMS) || 0,
         bathrooms: parseFloat(data.BathroomsTotalInteger || data.NO_FULL_BATHS || data.BathroomsTotal || data.BATHROOMS) || 0,
@@ -114,7 +122,8 @@ class PythonApiService {
         yearBuilt: yearBuilt,
         stories: stories,
         propertyType: this.mapPropertyType(data.PropertyType || data.PROP_TYPE),
-        status: this.mapListingStatus(data.ListingStatus || data.STATUS),
+        status: this.mapListingStatus(rawStatus, price),
+        rawStatus: rawStatus, // Keep original status for debugging
         images: this.generateMLSImages(data.LIST_NO || data.ListingID || data.MLS_NO, 5),
         lat: latitude || 42.6667, // Default to Boston area if no coordinates
         lng: longitude || -71.3020,
@@ -144,12 +153,27 @@ class PythonApiService {
     return typeMap[type] || 'houses';
   }
 
-  mapListingStatus(status) {
+  mapListingStatus(status, price = 0) {
     if (!status) return 'sale';
+    
+    // Price-based rental detection for misclassified ACT listings
+    // If ACT status but price is under $15,000, it's likely a rental
+    if (status === 'ACT' && price > 0 && price < 15000) {
+      return 'rent';
+    }
+    
     const statusMap = {
-      'ACT': 'sale',
-      'SOLD': 'sold',
-      'RENT': 'rent'
+      // For Sale statuses
+      'ACT': 'sale',     // Active
+      'CTG': 'sale',     // Contingent
+      'NEW': 'sale',     // New
+      'PCG': 'sale',     // Pending
+      'BOM': 'sale',     // Back on Market
+      'EXT': 'sale',     // Extended
+      // For Rent statuses
+      'RAC': 'rent',     // Rental Active
+      // Sold statuses
+      'SOLD': 'sold'     // Sold
     };
     return statusMap[status] || 'sale';
   }
@@ -203,7 +227,7 @@ class PythonApiService {
     if (cachedData) {
       return cachedData;
     }
-    
+
     try {
       console.log('🚀 Fetching listings from Python API...');
       const startTime = Date.now();
@@ -217,8 +241,31 @@ class PythonApiService {
       if (filters.bedrooms) params.append('bedrooms', filters.bedrooms);
       if (filters.bathrooms) params.append('bathrooms', filters.bathrooms);
       
-      // Request maximum available listings to ensure we get all CN222505 listings
-      params.append('limit', '25000');
+      // Add new parameters for better filtering and performance
+      if (filters.status) {
+        // Handle multiple status codes
+        if (Array.isArray(filters.status)) {
+          filters.status.forEach(statusCode => {
+            params.append('status', statusCode);
+          });
+        } else {
+          params.append('status', filters.status);
+        }
+      }
+      if (filters.exclude_sold !== undefined) params.append('exclude_sold', filters.exclude_sold);
+      
+      // First, get total count without limit to determine actual database size
+      const countParams = new URLSearchParams(params);
+      countParams.set('limit', '50000'); // Very high limit to get all records for counting
+      countParams.set('offset', '0');
+      
+      const countResponse = await this.client.get(`/listings?${countParams.toString()}`);
+      const totalCount = countResponse.data ? countResponse.data.count : 0;
+      
+      // Now get the actual paginated data
+      const limit = filters.limit || 50;
+      params.append('limit', limit.toString());
+      if (filters.offset) params.append('offset', filters.offset);
       
       const response = await this.client.get(`/listings?${params.toString()}`);
       
@@ -228,19 +275,29 @@ class PythonApiService {
       // Handle the Python API response format
       if (response.data && response.data.data) {
         const transformedData = this.transformListings(response.data.data);
+        const result = {
+          data: transformedData,
+          totalCount: totalCount,
+          returnedCount: transformedData.length
+        };
         // Cache the result
-        this.setCachedData(cacheKey, transformedData);
-        console.log(`✅ Cached ${transformedData.length} listings`);
-        return transformedData;
+        this.setCachedData(cacheKey, result);
+        console.log(`✅ Cached ${transformedData.length} listings, total available: ${result.totalCount}`);
+        return result;
       }
-      
-      return response.data || [];
+
+      return { data: response.data || [], totalCount: 0, returnedCount: 0 };
     } catch (error) {
       console.error('⚠️ Python API timeout/error, falling back to mock data:', error.message);
       const mockData = await mockDataService.getListings(filters);
+      const result = {
+        data: mockData.data || [],
+        totalCount: mockData.data ? mockData.data.length : 0,
+        returnedCount: mockData.data ? mockData.data.length : 0
+      };
       // Cache mock data temporarily
-      this.setCachedData(cacheKey, mockData.data);
-      return mockData.data;
+      this.setCachedData(cacheKey, result);
+      return result;
     }
   }
 
@@ -379,13 +436,49 @@ class PythonApiService {
   }
 
   async getSoldListings(filters = {}) {
+    if (this.useFallback) {
+      return await mockDataService.getSoldListings(filters);
+    }
+    
     try {
-      // For now, return empty array since our current data doesn't include sold listings
-      // This could be enhanced when sold listing data is available
-      return [];
+      console.log('🚀 Fetching sold listings from Python API...');
+      const startTime = Date.now();
+      
+      const params = new URLSearchParams();
+      
+      // Add status filter for sold listings
+      params.append('status', 'SOLD');
+      
+      if (filters.city) params.append('city', filters.city);
+      if (filters.minPrice) params.append('min_price', filters.minPrice);
+      if (filters.maxPrice) params.append('max_price', filters.maxPrice);
+      if (filters.propertyType) params.append('property_type', filters.propertyType);
+      
+      // Request all available sold listings
+      params.append('limit', '50000');
+      
+      const response = await this.client.get(`/listings?${params.toString()}`);
+      
+      const responseTime = Date.now() - startTime;
+      console.log(`⏱️ Sold listings API response time: ${responseTime}ms`);
+      
+      // Handle the Python API response format
+      if (response.data && response.data.data) {
+        const transformedData = this.transformListings(response.data.data);
+        console.log(`✅ Found ${transformedData.length} sold listings`);
+        return transformedData;
+      }
+      
+      return response.data || [];
     } catch (error) {
-      console.error('Error fetching sold listings from Python API:', error.message);
-      return [];
+      console.error('⚠️ Error fetching sold listings from Python API:', error.message);
+      // Fallback to mock data if available
+      try {
+        return await mockDataService.getSoldListings(filters);
+      } catch (fallbackError) {
+        console.error('⚠️ Mock data fallback also failed:', fallbackError.message);
+        return [];
+      }
     }
   }
 
