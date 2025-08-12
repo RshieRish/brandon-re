@@ -802,9 +802,16 @@ class ListingsPage {
 
     // New: Safely get address as a string from various shapes
     getAddressString(listing) {
+        // Handle both string addresses (from backend transformation) and object addresses
         const addr = listing && listing.address;
         if (!addr) return 'Address not available';
-        if (typeof addr === 'string') return addr;
+        
+        // If address is already a formatted string, return it directly
+        if (typeof addr === 'string') {
+            return addr !== 'Address not available' ? addr : 'Address not available';
+        }
+        
+        // Handle object format (fallback for different data structures)
         if (typeof addr === 'object') {
             const parts = [];
             const streetNumber = addr.streetNumber || addr.StreetNumber || addr.street_no || addr.number;
@@ -813,14 +820,17 @@ class ListingsPage {
             const city = addr.city || addr.City;
             const state = addr.state || addr.StateOrProvince || addr.stateOrProvince;
             const zip = addr.zip || addr.ZipCode || addr.postalCode || addr.PostalCode;
+            
             if (streetNumber && streetName) parts.push(`${streetNumber} ${streetName}`);
             else if (streetName) parts.push(streetName);
             if (unit) parts.push(`#${unit}`);
             if (city) parts.push(city);
             if (state) parts.push(state);
             if (zip) parts.push(zip);
+            
             return parts.filter(Boolean).join(', ') || 'Address not available';
         }
+        
         return 'Address not available';
     }
 

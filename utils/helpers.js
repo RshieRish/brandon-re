@@ -30,13 +30,7 @@ const formatListingData = (listing) => {
   return {
     id: listing.listingID || listing.id,
     mlsNumber: listing.listingID,
-    address: {
-      street: listing.address,
-      city: listing.cityName,
-      state: listing.state || 'MA',
-      zipCode: listing.zipcode,
-      county: listing.countyName
-    },
+    address: `${listing.address}, ${listing.cityName}, ${listing.state || 'MA'} ${listing.zipcode}`,
     price: {
       amount: listing.listPrice,
       formatted: formatPrice(listing.listPrice),
