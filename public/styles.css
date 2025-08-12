@@ -530,6 +530,8 @@ img, video, iframe {
     font-weight: 600;
     margin-bottom: 1.5rem;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+    text-align: center;
+    max-width: none;
 }
 
 .hero-description {
