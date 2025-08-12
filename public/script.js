@@ -1,5 +1,10 @@
 // Brandon Sweeney - Your Dracut Realtor - Frontend JavaScript
 
+// Safari compatibility polyfill
+if (window.NodeList && !NodeList.prototype.forEach) {
+    NodeList.prototype.forEach = Array.prototype.forEach;
+}
+
 // API Configuration
 const API_BASE_URL = window.location.hostname === 'localhost' 
     ? 'http://localhost:3001/api' 
