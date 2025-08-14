@@ -11,7 +11,7 @@
     <link rel="stylesheet" href="leaflet.css" />
     <style>
         .listings-page {
-            padding-top: 80px;
+            padding-top: calc(var(--nav-height) + var(--safe-area-top) + 20px);
             min-height: 100vh;
             background-color: #f8f9fa;
         }
@@ -315,6 +315,31 @@
             overflow: hidden;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             margin-bottom: 2rem;
+            position: relative;
+            z-index: 1; /* stay below navbar (1000) but above normal content */
+        }
+        
+        /* Ensure Leaflet map elements can receive pointer events */
+        .map-container .leaflet-container,
+        .map-container .leaflet-pane,
+        .map-container .leaflet-marker-pane,
+        .map-container .leaflet-popup-pane,
+        .map-container .leaflet-overlay-pane,
+        .map-container .leaflet-tile-pane {
+            pointer-events: auto;
+        }
+
+        /* Prevent hidden mobile menu from overlaying content when closed on small screens */
+        @media (max-width: 768px) {
+            .nav-menu:not(.mobile-open) {
+                pointer-events: none;
+            }
+        }
+        
+        /* Improve marker clickability and avoid being hidden under fixed navbar when scrolled into view */
+        .leaflet-marker-icon.custom-marker {
+            pointer-events: auto;
+            scroll-margin-top: calc(var(--nav-height) + var(--safe-area-top) + 24px);
         }
         
         .reset-filters {
@@ -355,6 +380,42 @@
         .exact-match label {
             font-size: 0.9rem;
             color: #6c757d;
+        }
+        
+        .location-search {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .location-input {
+            flex: 1;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+        
+        .location-search-btn {
+            padding: 0.75rem 1rem;
+            background: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .location-search-btn:hover {
+            background: #34495e;
+        }
+        
+        .radius-select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            margin-top: 0.25rem;
         }
         
         @media (max-width: 768px) {
@@ -427,6 +488,30 @@
                     <div class="price-range">
                         <input type="text" class="price-input" placeholder="No Min" id="minPrice">
                         <input type="text" class="price-input" placeholder="No Max" id="maxPrice">
+                    </div>
+                </div>
+
+                <!-- Location Search -->
+                <div class="filter-section">
+                    <div class="filter-title">
+                        <i class="fas fa-map-marker-alt"></i>
+                        Location
+                    </div>
+                    <div class="location-search">
+                        <input type="text" class="location-input" placeholder="Enter city, address, or ZIP" id="locationSearch">
+                        <button class="location-search-btn" id="searchLocationBtn">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                    <div class="location-radius" style="margin-top: 0.5rem;">
+                        <label for="searchRadius" style="font-size: 0.9rem; color: #6c757d;">Search radius:</label>
+                        <select id="searchRadius" class="radius-select">
+                            <option value="5">5 miles</option>
+                            <option value="10">10 miles</option>
+                            <option value="15">15 miles</option>
+                            <option value="25">25 miles</option>
+                            <option value="50">50 miles</option>
+                        </select>
                     </div>
                 </div>
 

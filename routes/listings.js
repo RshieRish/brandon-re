@@ -33,7 +33,11 @@ pythonApiService.healthCheck().then(health => {
 // Get all listings with filters
 router.get('/', async (req, res) => {
   try {
-    const { city, minPrice, maxPrice, propertyType, bedrooms, bathrooms, page = 1, limit = 50, status, exclude_sold } = req.query;
+    console.log('🚀 Listings API called with query:', req.query);
+    const { city, minPrice, maxPrice, propertyType, bedrooms, bathrooms, page = 1, limit = 10, status, exclude_sold } = req.query;
+    
+    // Cap limit to prevent timeouts
+    const cappedLimit = Math.min(parseInt(limit), 50);
     
     // Handle multiple status parameters (status can be a string or array)
     let statusArray = null;
@@ -45,6 +49,8 @@ router.get('/', async (req, res) => {
         const mlsStatuses = mapFrontendStatusToMLS(statusValue);
         statusArray.push(...mlsStatuses);
       }
+      console.log('🎯 Status mapping:', { frontend: status, mapped: statusArray });
+      console.log('🔍 StatusArray length:', statusArray.length, 'Multiple status?', statusArray.length > 1);
     }
     
     const baseFilters = {
@@ -55,50 +61,45 @@ router.get('/', async (req, res) => {
       bedrooms: bedrooms ? parseInt(bedrooms) : undefined,
       bathrooms: bathrooms ? parseInt(bathrooms) : undefined,
       exclude_sold: exclude_sold === 'true',
-      limit: parseInt(limit),
-      offset: (parseInt(page) - 1) * parseInt(limit)
+      limit: cappedLimit,
+      offset: (parseInt(page) - 1) * cappedLimit
     };
     
     let result;
     
-    // If we have multiple status codes (like for 'sale'), we need to make separate calls
-    // because the Python API doesn't support multiple status as OR conditions
+    // For multiple status codes (like 'sale'), we need to get total count and paginated results
     if (statusArray && statusArray.length > 1) {
-      // For multiple status codes, we need to aggregate results
-      const allListings = [];
-      let totalCount = 0;
+      console.log('🔍 Getting counts for sale statuses:', statusArray);
       
-      // Get total count for all status codes first
-      const countPromises = statusArray.map(statusCode => 
-        dataService.getListings({ ...baseFilters, status: statusCode, limit: 50000, offset: 0 })
-          .then(result => result.totalCount || 0)
-      );
+      // Get total count for all sale statuses combined (only count, not data)
+      const countPromises = statusArray.map(async (statusCode) => {
+        try {
+          const result = await dataService.getListings({ ...baseFilters, status: statusCode, limit: 10000, offset: 0 });
+          const dataLength = result.data ? result.data.length : 0;
+          const totalCount = result.totalCount || 0;
+          // Use data length as it's more reliable than totalCount from the API
+          const count = dataLength > 0 ? dataLength : totalCount;
+          console.log(`📊 Status ${statusCode}: ${count} listings (data: ${dataLength}, totalCount: ${totalCount})`);
+          return count;
+        } catch (error) {
+          console.error(`❌ Error getting count for status ${statusCode}:`, error.message);
+          return 0;
+        }
+      });
       
       const counts = await Promise.all(countPromises);
-      totalCount = counts.reduce((sum, count) => sum + count, 0);
+      const totalCount = counts.reduce((sum, count) => sum + count, 0);
+      console.log('📈 Total sale count:', totalCount, 'from counts:', counts);
       
-      // For pagination, we need to get listings from each status until we have enough
-      let remainingLimit = parseInt(limit);
-      let currentOffset = (parseInt(page) - 1) * parseInt(limit);
-      
-      for (const statusCode of statusArray) {
-        if (remainingLimit <= 0) break;
-        
-        const statusResult = await dataService.getListings({
-          ...baseFilters,
-          status: statusCode,
-          limit: Math.min(remainingLimit, 50),
-          offset: Math.max(0, currentOffset)
-        });
-        
-        const statusListings = statusResult.data || statusResult || [];
-        allListings.push(...statusListings.slice(0, remainingLimit));
-        remainingLimit -= statusListings.length;
-        currentOffset = Math.max(0, currentOffset - (statusResult.totalCount || 0));
-      }
+      // Get actual listings from primary status (ACT) for pagination
+      const primaryStatus = statusArray[0]; // Use ACT as primary for 'sale'
+      const listingsResult = await dataService.getListings({
+        ...baseFilters,
+        status: primaryStatus
+      });
       
       result = {
-        data: allListings,
+        data: listingsResult.data || listingsResult || [],
         totalCount: totalCount
       };
     } else {
@@ -107,7 +108,24 @@ router.get('/', async (req, res) => {
         ...baseFilters,
         status: statusArray && statusArray.length === 1 ? statusArray[0] : statusArray
       };
-      result = await dataService.getListings(filters);
+      
+      // For single status, also get accurate count using high limit
+      const countResult = await dataService.getListings({
+        ...filters,
+        limit: 10000,
+        offset: 0
+      });
+      
+      const actualCount = countResult.data ? countResult.data.length : (countResult.totalCount || 0);
+      console.log(`📊 Single status count: ${actualCount} listings (data: ${countResult.data?.length || 0}, totalCount: ${countResult.totalCount || 0})`);
+      
+      // Get paginated results
+      const listingsResult = await dataService.getListings(filters);
+      
+      result = {
+        data: listingsResult.data || listingsResult || [],
+        totalCount: actualCount
+      };
     }
     
     // Handle both old format (array) and new format (object with data/totalCount)
@@ -121,9 +139,9 @@ router.get('/', async (req, res) => {
         data: listings,
         pagination: {
           currentPage: parseInt(page),
-          totalPages: Math.ceil(totalCount / parseInt(limit)),
+          totalPages: Math.ceil(totalCount / cappedLimit),
           totalItems: totalCount,
-          itemsPerPage: parseInt(limit)
+          itemsPerPage: cappedLimit
         }
       }
     });
@@ -169,30 +187,65 @@ router.get('/counts/by-status', async (req, res) => {
       propertyType,
       bedrooms: bedrooms ? parseInt(bedrooms) : undefined,
       bathrooms: bathrooms ? parseInt(bathrooms) : undefined,
-      limit: 50000, // Very high limit to get all records for accurate counts
+      limit: 1, // Only need count, not actual data
       offset: 0
     };
     
-    // Get counts for each status using actual MLS status codes
-    // Since Python API doesn't support multiple status as OR, we need to sum individual counts
-    // Note: We pass status as string, not array, to avoid the array conversion in pythonApiService
+    // Get counts for each status using actual MLS status codes with high limits for accuracy
+    // Get accurate counts for all sale statuses combined
     const [allCount, actCount, ctgCount, newCount, pcgCount, bomCount, extCount, rentCount, soldCount] = await Promise.all([
-      // All active listings (exclude sold)
-      dataService.getListings({ ...baseFilters, exclude_sold: true }).then(result => result.totalCount || 0),
-      // Individual sale status counts - pass as string to avoid array conversion
-      dataService.getListings({ ...baseFilters, status: 'ACT' }).then(result => result.totalCount || 0),
-      dataService.getListings({ ...baseFilters, status: 'CTG' }).then(result => result.totalCount || 0),
-      dataService.getListings({ ...baseFilters, status: 'NEW' }).then(result => result.totalCount || 0),
-      dataService.getListings({ ...baseFilters, status: 'PCG' }).then(result => result.totalCount || 0),
-      dataService.getListings({ ...baseFilters, status: 'BOM' }).then(result => result.totalCount || 0),
-      dataService.getListings({ ...baseFilters, status: 'EXT' }).then(result => result.totalCount || 0),
-      // For rent listings (RAC)
-      dataService.getListings({ ...baseFilters, status: 'RAC' }).then(result => result.totalCount || 0),
-      // Sold listings
-      dataService.getSoldListings(baseFilters).then(result => Array.isArray(result) ? result.length : (result.data ? result.data.length : 0))
+      // All active listings (exclude sold) - use high limit for accurate count
+      dataService.getListings({ ...baseFilters, exclude_sold: true, limit: 10000 }).then(result => {
+        const dataLength = result.data ? result.data.length : 0;
+        const totalCount = result.totalCount || 0;
+        return dataLength > 0 ? dataLength : totalCount;
+      }),
+      // Individual sale status counts to get accurate total - use high limit
+      dataService.getListings({ ...baseFilters, status: 'ACT', limit: 10000 }).then(result => {
+        const dataLength = result.data ? result.data.length : 0;
+        const totalCount = result.totalCount || 0;
+        return dataLength > 0 ? dataLength : totalCount;
+      }),
+      dataService.getListings({ ...baseFilters, status: 'CTG', limit: 10000 }).then(result => {
+        const dataLength = result.data ? result.data.length : 0;
+        const totalCount = result.totalCount || 0;
+        return dataLength > 0 ? dataLength : totalCount;
+      }),
+      dataService.getListings({ ...baseFilters, status: 'NEW', limit: 10000 }).then(result => {
+        const dataLength = result.data ? result.data.length : 0;
+        const totalCount = result.totalCount || 0;
+        return dataLength > 0 ? dataLength : totalCount;
+      }),
+      dataService.getListings({ ...baseFilters, status: 'PCG', limit: 10000 }).then(result => {
+        const dataLength = result.data ? result.data.length : 0;
+        const totalCount = result.totalCount || 0;
+        return dataLength > 0 ? dataLength : totalCount;
+      }),
+      dataService.getListings({ ...baseFilters, status: 'BOM', limit: 10000 }).then(result => {
+        const dataLength = result.data ? result.data.length : 0;
+        const totalCount = result.totalCount || 0;
+        return dataLength > 0 ? dataLength : totalCount;
+      }),
+      dataService.getListings({ ...baseFilters, status: 'EXT', limit: 10000 }).then(result => {
+        const dataLength = result.data ? result.data.length : 0;
+        const totalCount = result.totalCount || 0;
+        return dataLength > 0 ? dataLength : totalCount;
+      }),
+      // For rent listings (RAC) - use high limit
+      dataService.getListings({ ...baseFilters, status: 'RAC', limit: 10000 }).then(result => {
+        const dataLength = result.data ? result.data.length : 0;
+        const totalCount = result.totalCount || 0;
+        return dataLength > 0 ? dataLength : totalCount;
+      }),
+      // Sold listings - use high limit
+      dataService.getListings({ ...baseFilters, status: 'SOLD', limit: 10000 }).then(result => {
+        const dataLength = result.data ? result.data.length : 0;
+        const totalCount = result.totalCount || 0;
+        return dataLength > 0 ? dataLength : totalCount;
+      })
     ]);
     
-    // Sum up all sale status counts
+    // Sum up all sale status counts for accurate total
     const saleCount = actCount + ctgCount + newCount + pcgCount + bomCount + extCount;
     
     console.log('📊 Status counts:', { all: allCount, sale: saleCount, rent: rentCount, sold: soldCount });
@@ -361,10 +414,15 @@ router.get('/sold/recent', async (req, res) => {
       minPrice,
       maxPrice,
       propertyType,
-      daysBack = 90
+      daysBack = 90,
+      page = 1,
+      limit = 10
     } = req.query;
 
-    const filters = {
+    // Cap limit to prevent timeouts
+    const cappedLimit = Math.min(parseInt(limit), 50);
+    
+    const baseFilters = {
       city,
       minPrice: minPrice ? parseInt(minPrice) : undefined,
       maxPrice: maxPrice ? parseInt(maxPrice) : undefined,
@@ -372,13 +430,37 @@ router.get('/sold/recent', async (req, res) => {
       daysBack: parseInt(daysBack)
     };
 
-    const soldListings = await dataService.getSoldListings(filters);
+    // Get total count first (without pagination)
+    const allSoldListings = await dataService.getSoldListings(baseFilters);
+    const totalCount = allSoldListings?.length || 0;
+    
+    console.log(`📊 Sold listings total count: ${totalCount}`);
+    
+    // Get paginated results
+    const paginatedFilters = {
+      ...baseFilters,
+      limit: cappedLimit,
+      offset: (parseInt(page) - 1) * cappedLimit
+    };
+    
+    const paginatedSoldListings = await dataService.getSoldListings(paginatedFilters);
+    const currentPageData = paginatedSoldListings || [];
+    
+    console.log(`📄 Sold listings page ${page}: ${currentPageData.length} items`);
     
     res.json({
       success: true,
-      data: soldListings || [],
-      filters,
-      count: soldListings?.length || 0
+      data: {
+        data: currentPageData,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(totalCount / cappedLimit),
+          totalItems: totalCount,
+          itemsPerPage: cappedLimit
+        }
+      },
+      filters: baseFilters,
+      count: totalCount
     });
   } catch (error) {
     console.error('Error fetching sold listings:', error);
@@ -388,6 +470,8 @@ router.get('/sold/recent', async (req, res) => {
     });
   }
 });
+
+
 
 // Get total counts by status for accurate filter display
 module.exports = router;
