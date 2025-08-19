@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en" class="admin-html">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM Dashboard - Brandon Sweeney | SWS & Co.</title>
+    <link rel="icon" type="image/png" href="SWS Smiley Transparent Background COLOR.png">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="safari-fix.css">
+    <link rel="stylesheet" href="admin-styles.css">
+    <link rel="stylesheet" href="crm-styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="admin-body">
+    <!-- CRM Navigation -->
+    <nav class="admin-navbar">
+        <div class="admin-nav-container">
+            <div class="admin-nav-logo">
+                <h2>SWS & Co. CRM</h2>
+                <span class="admin-tagline">Customer Relationship Management</span>
+            </div>
+            <div class="admin-nav-menu">
+                <a href="#dashboard" class="admin-nav-link active" data-section="dashboard">
+                    <i class="fas fa-chart-line"></i> Dashboard
+                </a>
+                <a href="#contacts" class="admin-nav-link" data-section="contacts">
+                    <i class="fas fa-address-book"></i> Contacts
+                </a>
+                <a href="#leads" class="admin-nav-link" data-section="leads">
+                    <i class="fas fa-users"></i> Leads
+                </a>
+                <a href="#opportunities" class="admin-nav-link" data-section="opportunities">
+                    <i class="fas fa-handshake"></i> Opportunities
+                </a>
+                <a href="#activities" class="admin-nav-link" data-section="activities">
+                    <i class="fas fa-calendar-alt"></i> Activities
+                </a>
+                <a href="#reports" class="admin-nav-link" data-section="reports">
+                    <i class="fas fa-chart-bar"></i> Reports
+                </a>
+            </div>
+            <div class="admin-nav-actions">
+                <a href="admin.html" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Admin
+                </a>
+                <button class="btn btn-primary" id="logoutBtn">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="admin-main">
+        <!-- Dashboard Section -->
+        <section id="dashboard-section" class="admin-section active">
+            <div class="admin-header">
+                <h1>CRM Dashboard</h1>
+                <p>Overview of your customer relationships and sales pipeline</p>
+            </div>
+
+            <!-- KPI Cards -->
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="kpi-content">
+                        <h3 id="totalContacts">1,247</h3>
+                        <p>Total Contacts</p>
+                        <span class="kpi-change positive">+12% from last month</span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="kpi-content">
+                        <h3 id="activeLeads">89</h3>
+                        <p>Active Leads</p>
+                        <span class="kpi-change positive">+8% from last month</span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon">
+                        <i class="fas fa-handshake"></i>
+                    </div>
+                    <div class="kpi-content">
+                        <h3 id="closedDeals">23</h3>
+                        <p>Closed Deals</p>
+                        <span class="kpi-change positive">+15% from last month</span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon">
+                        <i class="fas fa-dollar-sign"></i>
+                    </div>
+                    <div class="kpi-content">
+                        <h3 id="totalRevenue">$2.4M</h3>
+                        <p>Total Revenue</p>
+                        <span class="kpi-change positive">+22% from last month</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>Sales Pipeline</h3>
+                        <div class="chart-actions">
+                            <select id="pipelineTimeframe">
+                                <option value="30">Last 30 days</option>
+                                <option value="90">Last 90 days</option>
+                                <option value="365">Last year</option>
+                            </select>
+                        </div>
+                    </div>
+                    <canvas id="pipelineChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>Lead Sources</h3>
+                        <div class="chart-actions">
+                            <button class="btn btn-sm btn-secondary" id="refreshLeadSources">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <canvas id="leadSourcesChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Recent Activities -->
+            <div class="recent-activities">
+                <div class="activities-header">
+                    <h3>Recent Activities</h3>
+                    <a href="#activities" class="btn btn-sm btn-primary" data-section="activities">View All</a>
+                </div>
+                <div class="activities-list" id="recentActivitiesList">
+                    <!-- Activities will be loaded here -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Contacts Section -->
+        <section id="contacts-section" class="admin-section">
+            <div class="admin-header">
+                <h1>Contacts</h1>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" id="importContactsBtn">
+                        <i class="fas fa-upload"></i> Import
+                    </button>
+                    <button class="btn btn-secondary" id="exportContactsBtn">
+                        <i class="fas fa-download"></i> Export
+                    </button>
+                    <button class="btn btn-primary" id="addContactBtn">
+                        <i class="fas fa-plus"></i> Add Contact
+                    </button>
+                </div>
+            </div>
+
+            <!-- Contacts Filter -->
+            <div class="admin-filters">
+                <input type="text" id="contactSearch" placeholder="Search contacts..." class="filter-input">
+                <select id="contactTypeFilter" class="filter-input">
+                    <option value="">All Types</option>
+                    <option value="buyer">Buyer</option>
+                    <option value="seller">Seller</option>
+                    <option value="investor">Investor</option>
+                    <option value="referral">Referral Source</option>
+                </select>
+                <select id="contactStatusFilter" class="filter-input">
+                    <option value="">All Status</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="prospect">Prospect</option>
+                </select>
+            </div>
+
+            <!-- Contacts Table -->
+            <div class="admin-table-container">
+                <table class="admin-table" id="contactsTable">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Last Contact</th>
+                            <th>Value</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="contactsTableBody">
+                        <!-- Contacts will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Leads Section -->
+        <section id="leads-section" class="admin-section">
+            <div class="admin-header">
+                <h1>Leads Management</h1>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" id="exportLeadsBtn">
+                        <i class="fas fa-download"></i> Export
+                    </button>
+                    <button class="btn btn-primary" id="addLeadBtn">
+                        <i class="fas fa-plus"></i> Add Lead
+                    </button>
+                </div>
+            </div>
+
+            <!-- Lead Pipeline Board -->
+            <div class="pipeline-board">
+                <div class="pipeline-column" data-stage="new">
+                    <div class="pipeline-header">
+                        <h3>New Leads</h3>
+                        <span class="pipeline-count" id="newLeadsCount">12</span>
+                    </div>
+                    <div class="pipeline-cards" id="newLeadsCards">
+                        <!-- Lead cards will be loaded here -->
+                    </div>
+                </div>
+                <div class="pipeline-column" data-stage="contacted">
+                    <div class="pipeline-header">
+                        <h3>Contacted</h3>
+                        <span class="pipeline-count" id="contactedLeadsCount">8</span>
+                    </div>
+                    <div class="pipeline-cards" id="contactedLeadsCards">
+                        <!-- Lead cards will be loaded here -->
+                    </div>
+                </div>
+                <div class="pipeline-column" data-stage="qualified">
+                    <div class="pipeline-header">
+                        <h3>Qualified</h3>
+                        <span class="pipeline-count" id="qualifiedLeadsCount">15</span>
+                    </div>
+                    <div class="pipeline-cards" id="qualifiedLeadsCards">
+                        <!-- Lead cards will be loaded here -->
+                    </div>
+                </div>
+                <div class="pipeline-column" data-stage="proposal">
+                    <div class="pipeline-header">
+                        <h3>Proposal</h3>
+                        <span class="pipeline-count" id="proposalLeadsCount">6</span>
+                    </div>
+                    <div class="pipeline-cards" id="proposalLeadsCards">
+                        <!-- Lead cards will be loaded here -->
+                    </div>
+                </div>
+                <div class="pipeline-column" data-stage="closed">
+                    <div class="pipeline-header">
+                        <h3>Closed</h3>
+                        <span class="pipeline-count" id="closedLeadsCount">23</span>
+                    </div>
+                    <div class="pipeline-cards" id="closedLeadsCards">
+                        <!-- Lead cards will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Opportunities Section -->
+        <section id="opportunities-section" class="admin-section">
+            <div class="admin-header">
+                <h1>Opportunities</h1>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" id="exportOpportunitiesBtn">
+                        <i class="fas fa-download"></i> Export
+                    </button>
+                    <button class="btn btn-primary" id="addOpportunityBtn">
+                        <i class="fas fa-plus"></i> Add Opportunity
+                    </button>
+                </div>
+            </div>
+
+            <!-- Opportunities Table -->
+            <div class="admin-table-container">
+                <table class="admin-table" id="opportunitiesTable">
+                    <thead>
+                        <tr>
+                            <th>Property</th>
+                            <th>Client</th>
+                            <th>Type</th>
+                            <th>Value</th>
+                            <th>Stage</th>
+                            <th>Probability</th>
+                            <th>Close Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="opportunitiesTableBody">
+                        <!-- Opportunities will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Activities Section -->
+        <section id="activities-section" class="admin-section">
+            <div class="admin-header">
+                <h1>Activities</h1>
+                <div class="header-actions">
+                    <button class="btn btn-primary" id="addActivityBtn">
+                        <i class="fas fa-plus"></i> Add Activity
+                    </button>
+                </div>
+            </div>
+
+            <!-- Activities Calendar View -->
+            <div class="activities-calendar" id="activitiesCalendar">
+                <!-- Calendar will be loaded here -->
+            </div>
+
+            <!-- Activities List -->
+            <div class="activities-list-container">
+                <h3>Upcoming Activities</h3>
+                <div class="activities-list" id="activitiesList">
+                    <!-- Activities will be loaded here -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Reports Section -->
+        <section id="reports-section" class="admin-section">
+            <div class="admin-header">
+                <h1>Reports & Analytics</h1>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" id="exportReportBtn">
+                        <i class="fas fa-download"></i> Export Report
+                    </button>
+                    <button class="btn btn-primary" id="generateReportBtn">
+                        <i class="fas fa-chart-bar"></i> Generate Report
+                    </button>
+                </div>
+            </div>
+
+            <!-- Report Filters -->
+            <div class="report-filters">
+                <div class="filter-group">
+                    <label>Date Range:</label>
+                    <input type="date" id="reportStartDate" class="filter-input">
+                    <span>to</span>
+                    <input type="date" id="reportEndDate" class="filter-input">
+                </div>
+                <div class="filter-group">
+                    <label>Report Type:</label>
+                    <select id="reportType" class="filter-input">
+                        <option value="sales">Sales Performance</option>
+                        <option value="leads">Lead Conversion</option>
+                        <option value="contacts">Contact Activity</option>
+                        <option value="revenue">Revenue Analysis</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Report Charts -->
+            <div class="report-charts">
+                <div class="chart-card">
+                    <h3>Performance Overview</h3>
+                    <canvas id="performanceChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Conversion Funnel</h3>
+                    <canvas id="conversionChart"></canvas>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Contact Modal -->
+    <div id="contactModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="contactModalTitle">Add Contact</h2>
+                <span class="close" id="closeContactModal">&times;</span>
+            </div>
+            <form id="contactForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="contactFirstName">First Name</label>
+                        <input type="text" id="contactFirstName" name="firstName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="contactLastName">Last Name</label>
+                        <input type="text" id="contactLastName" name="lastName" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="contactEmail">Email</label>
+                        <input type="email" id="contactEmail" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="contactPhone">Phone</label>
+                        <input type="tel" id="contactPhone" name="phone">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="contactType">Type</label>
+                        <select id="contactType" name="type" required>
+                            <option value="">Select Type</option>
+                            <option value="buyer">Buyer</option>
+                            <option value="seller">Seller</option>
+                            <option value="investor">Investor</option>
+                            <option value="referral">Referral Source</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="contactStatus">Status</label>
+                        <select id="contactStatus" name="status" required>
+                            <option value="">Select Status</option>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="prospect">Prospect</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="contactNotes">Notes</label>
+                    <textarea id="contactNotes" name="notes" rows="3"></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelContactBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Contact</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="crm-script.js"></script>
+</body>
+</html>
