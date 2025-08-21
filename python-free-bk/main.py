@@ -435,7 +435,14 @@ def get_contact(contact_id: int):
     try:
         with get_conn() as conn, conn.cursor() as cur:
             cur.execute("""
-                SELECT * FROM crm_contacts WHERE id = %s
+                SELECT id, first_name, last_name, full_name, primary_personal_email, 
+                       primary_personal_phone, mailing_city, mailing_state,
+                       health_score, last_contacted_at, created_at, updated_at,
+                       COALESCE(custom_tags, '') as tags, owner_user_id, assignee_user_id,
+                       notes, mailing_address_line1, mailing_address_line2, mailing_address_zip,
+                       lead_source, birthday, anniversary, about, company_name, title, stage,
+                       source, other_source
+                FROM crm_contacts WHERE id = %s
             """, (contact_id,))
             
             contact = cur.fetchone()
